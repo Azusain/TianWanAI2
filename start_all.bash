@@ -1,4 +1,6 @@
 #!/bin/bash
+source /app/venv/bin/activate
+
 echo "Starting TianWan AI Detection Services..."
 
 # Debug: Show which python is being used
