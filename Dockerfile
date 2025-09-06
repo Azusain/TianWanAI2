@@ -2,7 +2,7 @@
 # Stage 1: Python dependencies builder
 FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04 AS python-builder
 
-ENV WORKDIR=/root
+ENV WORKDIR=/app
 WORKDIR ${WORKDIR}
 
 # Install Python and create virtual environment
