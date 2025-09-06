@@ -72,15 +72,15 @@ COPY fire_service.py ./
 COPY helmet_service.py ./
 COPY safetybelt_service.py ./
 COPY gateway.py ./
-COPY start_all.sh ./
+COPY start_all.bash ./
 
 # Create symlink for python
 RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 || true
 
 # Make startup script executable
-RUN chmod +x start_all.sh
+RUN chmod +x start_all.bash
 
 # Expose gateway port
 EXPOSE 8080
 
-CMD ["./start_all.sh"]
+CMD ["bash", "start_all.bash"]
