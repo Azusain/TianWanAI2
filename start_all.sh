@@ -1,19 +1,29 @@
 #!/bin/bash
 echo "Starting TianWan AI Detection Services..."
 
+# Debug: Show which python is being used
+echo "Using python: $(which python)"
+echo "Python version: $(python --version)"
+
+# Verify critical dependencies
+python -c "import numpy, cv2, torch, requests, flask; print('All dependencies verified')" || {
+    echo "ERROR: Dependencies missing!"
+    exit 1
+}
+
 # Start fire detection service in background
 echo "Starting Fire Detection Service on port 8901..."
-/app/venv/bin/python fire_service.py &
+python fire_service.py &
 FIRE_PID=$!
 
 # Start helmet safety service in background  
 echo "Starting Helmet Safety Service on port 8902..."
-/app/venv/bin/python helmet_service.py &
+python helmet_service.py &
 HELMET_PID=$!
 
 # Start safetybelt compliance service in background
 echo "Starting Safety Belt Service on port 8903..."
-/app/venv/bin/python safetybelt_service.py &
+python safetybelt_service.py &
 SAFETYBELT_PID=$!
 
 # Wait a moment for services to start
@@ -21,7 +31,7 @@ sleep 5
 
 # Start API gateway (foreground)
 echo "Starting API Gateway on port 8080..."
-/app/venv/bin/python gateway.py &
+python gateway.py &
 GATEWAY_PID=$!
 
 # Function to handle shutdown

@@ -24,15 +24,14 @@ COPY YOLO-main-fire/requirements.txt ./fire-requirements.txt
 COPY YOLO-main-helmet/requirements.txt ./helmet-requirements.txt
 COPY YOLO-main-safetybelt/requirements.txt ./safetybelt-requirements.txt
 
-# Install Python dependencies using absolute paths
-RUN /app/venv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    /app/venv/bin/pip install --no-cache-dir -r requirements.txt && \
-    /app/venv/bin/pip install --no-cache-dir -r fire-requirements.txt && \
-    /app/venv/bin/pip install --no-cache-dir -r helmet-requirements.txt && \
-    /app/venv/bin/pip install --no-cache-dir -r safetybelt-requirements.txt && \
-    /app/venv/bin/pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu126 && \
-    # Verify critical packages are installed
-    /app/venv/bin/python -c "import cv2; import requests; import flask; import ultralytics; import numpy; print('All dependencies verified')" && \
+# Install Python dependencies using virtual environment activation
+RUN . venv/bin/activate && \
+    pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu126 && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir -r fire-requirements.txt && \
+    pip install --no-cache-dir -r helmet-requirements.txt && \
+    pip install --no-cache-dir -r safetybelt-requirements.txt && \
     # Clean up unnecessary files in venv
     find venv -name "*.pyc" -delete && \
     find venv -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true && \
