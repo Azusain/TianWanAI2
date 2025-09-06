@@ -11,6 +11,11 @@ echo "Starting Helmet Safety Service on port 8902..."
 /app/venv/bin/python helmet_service.py &
 HELMET_PID=$!
 
+# Start safetybelt compliance service in background
+echo "Starting Safety Belt Service on port 8903..."
+/app/venv/bin/python safetybelt_service.py &
+SAFETYBELT_PID=$!
+
 # Wait a moment for services to start
 sleep 5
 
@@ -22,7 +27,7 @@ GATEWAY_PID=$!
 # Function to handle shutdown
 shutdown() {
     echo "Shutting down services..."
-    kill $FIRE_PID $HELMET_PID $GATEWAY_PID 2>/dev/null
+    kill $FIRE_PID $HELMET_PID $SAFETYBELT_PID $GATEWAY_PID 2>/dev/null
     exit 0
 }
 

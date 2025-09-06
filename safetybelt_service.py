@@ -12,10 +12,10 @@ from loguru import logger
 from uuid import uuid4
 from ultralytics import YOLO
 
-# Add helmet model directory to path
+# Add safetybelt model directory to path
 script_dir = os.path.dirname(os.path.abspath(__file__))
-helmet_yolo_path = os.path.join(script_dir, "YOLO-main-helmet")
-sys.path.insert(0, helmet_yolo_path)
+safetybelt_yolo_path = os.path.join(script_dir, "YOLO-main-safetybelt")
+sys.path.insert(0, safetybelt_yolo_path)
 
 # Import YOLOX modules
 from yolox.data.data_augment import ValTransform
@@ -75,42 +75,50 @@ class PersonDetector:
             logger.error(f"person detection error: {e}")
             return []
 
-class HelmetPredictor:
+class SafetyBeltPredictor:
     def __init__(self):
         self.model = None
         self.exp = None
         self.predictor = None
+        self.device = get_device()
         self._load_model()
     
     def _load_model(self):
         try:
             # Get experiment configuration
-            exp_file = os.path.join(helmet_yolo_path, "exps/example/yolox_voc/yolox_voc_s.py")
+            exp_file = os.path.join(safetybelt_yolo_path, "exps/example/yolox_voc/yolox_voc_s.py")
             self.exp = get_exp(exp_file, None)
             
             # Get model
             self.model = self.exp.get_model()
-            logger.info(f"helmet model summary: {get_model_info(self.model, self.exp.test_size)}")
+            logger.info(f"safetybelt model summary: {get_model_info(self.model, self.exp.test_size)}")
             
-            # Use CPU for compatibility
+            # Set evaluation mode
             self.model.eval()
             
             # Load checkpoint
-            ckpt_path = os.path.join(helmet_yolo_path, "weights/best.pth")
-            logger.info(f"loading helmet checkpoint: {ckpt_path}")
-            ckpt = torch.load(ckpt_path, map_location="cpu")
+            ckpt_path = os.path.join(safetybelt_yolo_path, "weights/best.pth")
+            logger.info(f"loading safetybelt checkpoint: {ckpt_path}")
+            
+            # Load checkpoint with appropriate device mapping
+            if self.device == "cuda":
+                ckpt = torch.load(ckpt_path, map_location="cuda")
+                self.model = self.model.cuda()
+            else:
+                ckpt = torch.load(ckpt_path, map_location="cpu")
             
             # Load model state dict
             self.model.load_state_dict(ckpt)
-            logger.info("helmet checkpoint loaded successfully")
+            logger.info(f"safetybelt checkpoint loaded successfully on {self.device}")
             
             # Create predictor
+            device_str = "gpu" if self.device == "cuda" else "cpu"
             self.predictor = Predictor(
-                self.model, self.exp, ["person", "helmet"], None, None, "cpu", False, False
+                self.model, self.exp, ["person", "safetybelt"], None, None, device_str, False, False
             )
             
         except Exception as e:
-            logger.error(f"failed to load helmet model: {e}")
+            logger.error(f"failed to load safetybelt model: {e}")
             raise e
     
     def predict(self, img):
@@ -126,7 +134,7 @@ class HelmetPredictor:
             return [], -4
             
         except Exception as e:
-            logger.error(f"helmet prediction error: {e}")
+            logger.error(f"safetybelt prediction error: {e}")
             return None, -5
     
     def _convert_to_api_format(self, output, img_info, cls_conf=0.35):
@@ -160,7 +168,7 @@ class HelmetPredictor:
                 top_n = cyn - height_n / 2
                 
                 class_idx = int(cls[i])
-                class_name = "person" if class_idx == 0 else "helmet"
+                class_name = "person" if class_idx == 0 else "safetybelt"
                 
                 results.append({
                     "score": float(scores[i]),
@@ -222,13 +230,13 @@ class Predictor:
                 outputs, self.num_classes, self.confthre,
                 self.nmsthre, class_agnostic=True
             )
-            logger.info("helmet infer time: {:.4f}s".format(time.time() - t0))
+            logger.info("safetybelt infer time: {:.4f}s".format(time.time() - t0))
         return outputs, img_info
 
-class HelmetSafetyService:
+class SafetyBeltService:
     def __init__(self):
         self.person_detector = PersonDetector()
-        self.helmet_detector = HelmetPredictor()
+        self.safetybelt_detector = SafetyBeltPredictor()
     
     def calculate_iou(self, box1, box2):
         """Calculate IoU between two bounding boxes"""
@@ -247,15 +255,15 @@ class HelmetSafetyService:
         
         return intersection / union if union > 0 else 0.0
     
-    def predict_helmet_safety(self, img):
+    def predict_safetybelt_compliance(self, img):
         try:
             # First detect persons
             persons = self.person_detector.detect_persons(img)
             if not persons:
                 return [], -4
             
-            # Then detect helmets
-            helmet_results, helmet_errno = self.helmet_detector.predict(img)
+            # Then detect safety belts
+            safetybelt_results, safetybelt_errno = self.safetybelt_detector.predict(img)
             
             # Process results for each person
             final_results = []
@@ -265,32 +273,32 @@ class HelmetSafetyService:
                 person_bbox = person["bbox"]
                 person_conf = person["confidence"]
                 
-                # Check if any helmet overlaps with this person
-                has_helmet = False
-                max_helmet_score = 0.0
+                # Check if any safety belt overlaps with this person
+                has_safetybelt = False
+                max_safetybelt_score = 0.0
                 
-                if helmet_errno == 0 and helmet_results:
-                    for helmet_item in helmet_results:
-                        if helmet_item["class_name"] == "helmet":
+                if safetybelt_errno == 0 and safetybelt_results:
+                    for safetybelt_item in safetybelt_results:
+                        if safetybelt_item["class_name"] == "safetybelt":
                             # Convert normalized coordinates back to pixel coordinates
-                            loc = helmet_item["location"]
-                            helmet_x1 = int((loc["left"]) * img_width)
-                            helmet_y1 = int((loc["top"]) * img_height)
-                            helmet_x2 = int((loc["left"] + loc["width"]) * img_width)
-                            helmet_y2 = int((loc["top"] + loc["height"]) * img_height)
-                            helmet_bbox = [helmet_x1, helmet_y1, helmet_x2, helmet_y2]
+                            loc = safetybelt_item["location"]
+                            safetybelt_x1 = int((loc["left"]) * img_width)
+                            safetybelt_y1 = int((loc["top"]) * img_height)
+                            safetybelt_x2 = int((loc["left"] + loc["width"]) * img_width)
+                            safetybelt_y2 = int((loc["top"] + loc["height"]) * img_height)
+                            safetybelt_bbox = [safetybelt_x1, safetybelt_y1, safetybelt_x2, safetybelt_y2]
                             
                             # Check IoU overlap
-                            iou = self.calculate_iou(person_bbox, helmet_bbox)
+                            iou = self.calculate_iou(person_bbox, safetybelt_bbox)
                             if iou > 0.1:  # If there's some overlap
-                                has_helmet = True
-                                max_helmet_score = max(max_helmet_score, helmet_item["score"])
+                                has_safetybelt = True
+                                max_safetybelt_score = max(max_safetybelt_score, safetybelt_item["score"])
                 
-                # Calculate helmet violation score (1 - helmet_score)
-                if has_helmet:
-                    violation_score = 1.0 - max_helmet_score
+                # Calculate safety belt violation score (1 - safetybelt_score)
+                if has_safetybelt:
+                    violation_score = 1.0 - max_safetybelt_score
                 else:
-                    violation_score = 1.0  # No helmet detected = maximum violation
+                    violation_score = 1.0  # No safety belt detected = maximum violation
                 
                 # Normalize person bbox coordinates
                 person_left = person_bbox[0] / img_width
@@ -301,8 +309,8 @@ class HelmetSafetyService:
                 final_results.append({
                     "score": violation_score,
                     "person_confidence": person_conf,
-                    "has_helmet": has_helmet,
-                    "helmet_score": max_helmet_score if has_helmet else 0.0,
+                    "has_safetybelt": has_safetybelt,
+                    "safetybelt_score": max_safetybelt_score if has_safetybelt else 0.0,
                     "location": {
                         "left": person_left,
                         "top": person_top,
@@ -314,11 +322,11 @@ class HelmetSafetyService:
             return final_results, 0
             
         except Exception as e:
-            logger.error(f"helmet safety detection error: {e}")
+            logger.error(f"safety belt detection error: {e}")
             return None, -5
 
-# Initialize helmet safety service
-helmet_safety_service = HelmetSafetyService()
+# Initialize safety belt service
+safetybelt_service = SafetyBeltService()
 
 # Create Flask app
 app = Flask(__name__)
@@ -348,7 +356,7 @@ def validate_img_format():
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    """Helmet safety detection endpoint"""
+    """Safety belt compliance detection endpoint"""
     img, errno = validate_img_format()
     if img is None:
         return jsonify({
@@ -359,20 +367,20 @@ def predict():
         })
     
     # Inference
-    results, errno = helmet_safety_service.predict_helmet_safety(img)
+    results, errno = safetybelt_service.predict_safetybelt_compliance(img)
     return jsonify({
         "log_id": str(uuid4()),
         "errno": errno,
         "err_msg": "success" if errno == 0 else "prediction error",
-        "model_name": "helmet_safety",
+        "model_name": "safetybelt_compliance",
         "results": results if results else []
     })
 
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
-    return jsonify({"status": "healthy", "model": "helmet_safety"})
+    return jsonify({"status": "healthy", "model": "safetybelt_compliance"})
 
 if __name__ == '__main__':
-    logger.info("starting helmet safety detection service on port 8902...")
-    app.run(host='0.0.0.0', port=8902, debug=False)
+    logger.info("starting safety belt compliance detection service on port 8903...")
+    app.run(host='0.0.0.0', port=8903, debug=False)

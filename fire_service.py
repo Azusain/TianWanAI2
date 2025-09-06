@@ -22,11 +22,22 @@ from yolox.data.datasets import VOC_CLASSES
 from yolox.exp import get_exp
 from yolox.utils import get_model_info, postprocess
 
+def get_device():
+    """Auto-detect device: prefer CUDA, fallback to CPU"""
+    if torch.cuda.is_available():
+        device = "cuda"
+        logger.info(f"using GPU device: {torch.cuda.get_device_name()}")
+    else:
+        device = "cpu"
+        logger.info("CUDA not available, using CPU")
+    return device
+
 class FirePredictor:
     def __init__(self):
         self.model = None
         self.exp = None
         self.predictor = None
+        self.device = get_device()
         self._load_model()
     
     def _load_model(self):
@@ -39,21 +50,28 @@ class FirePredictor:
             self.model = self.exp.get_model()
             logger.info(f"fire model summary: {get_model_info(self.model, self.exp.test_size)}")
             
-            # Use CPU for compatibility
+            # Set evaluation mode
             self.model.eval()
             
             # Load checkpoint
             ckpt_path = os.path.join(fire_yolo_path, "weights/best.pth")
             logger.info(f"loading fire checkpoint: {ckpt_path}")
-            ckpt = torch.load(ckpt_path, map_location="cpu")
+            
+            # Load checkpoint with appropriate device mapping
+            if self.device == "cuda":
+                ckpt = torch.load(ckpt_path, map_location="cuda")
+                self.model = self.model.cuda()
+            else:
+                ckpt = torch.load(ckpt_path, map_location="cpu")
             
             # Load model state dict
             self.model.load_state_dict(ckpt)
-            logger.info("fire checkpoint loaded successfully")
+            logger.info(f"fire checkpoint loaded successfully on {self.device}")
             
             # Create predictor
+            device_str = "gpu" if self.device == "cuda" else "cpu"
             self.predictor = Predictor(
-                self.model, self.exp, ["fire"], None, None, "cpu", False, False
+                self.model, self.exp, ["fire"], None, None, device_str, False, False
             )
             
         except Exception as e:

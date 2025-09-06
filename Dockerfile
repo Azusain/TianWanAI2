@@ -18,14 +18,21 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
+# Copy all requirements files
 COPY requirements.txt ./
-RUN . venv/bin/activate && \
-    pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu126 && \
+COPY YOLO-main-fire/requirements.txt ./fire-requirements.txt
+COPY YOLO-main-helmet/requirements.txt ./helmet-requirements.txt
+COPY YOLO-main-safetybelt/requirements.txt ./safetybelt-requirements.txt
+
+# Install Python dependencies using absolute paths
+RUN /app/venv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    /app/venv/bin/pip install --no-cache-dir -r requirements.txt && \
+    /app/venv/bin/pip install --no-cache-dir -r fire-requirements.txt && \
+    /app/venv/bin/pip install --no-cache-dir -r helmet-requirements.txt && \
+    /app/venv/bin/pip install --no-cache-dir -r safetybelt-requirements.txt && \
+    /app/venv/bin/pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu126 && \
     # Verify critical packages are installed
-    python -c "import cv2; import requests; import flask; import ultralytics; print('All dependencies verified')" && \
+    /app/venv/bin/python -c "import cv2; import requests; import flask; import ultralytics; import numpy; print('All dependencies verified')" && \
     # Clean up unnecessary files in venv
     find venv -name "*.pyc" -delete && \
     find venv -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true && \
@@ -60,9 +67,11 @@ COPY --from=python-builder ${WORKDIR}/venv ${WORKDIR}/venv
 # Copy application code
 COPY YOLO-main-fire/ ./YOLO-main-fire/
 COPY YOLO-main-helmet/ ./YOLO-main-helmet/
+COPY YOLO-main-safetybelt/ ./YOLO-main-safetybelt/
 COPY models/ ./models/
 COPY fire_service.py ./
 COPY helmet_service.py ./
+COPY safetybelt_service.py ./
 COPY gateway.py ./
 COPY start_all.sh ./
 
