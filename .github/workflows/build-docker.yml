@@ -3,13 +3,24 @@ name: Build TianWan AI Docker Image
 on:
   workflow_dispatch:
   push:
-    branches: [main, master]
-    tags: ['v*']
+    branches: [main]
+    tags: ["v*"]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
