@@ -22,8 +22,10 @@ RUN apt-get update && \
 COPY requirements.txt ./
 RUN . venv/bin/activate && \
     pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu126 && \
     pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu126 && \
+    # Verify critical packages are installed
+    python -c "import cv2; import requests; import flask; import ultralytics; print('All dependencies verified')" && \
     # Clean up unnecessary files in venv
     find venv -name "*.pyc" -delete && \
     find venv -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true && \
