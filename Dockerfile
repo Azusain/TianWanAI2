@@ -43,17 +43,15 @@ RUN . venv/bin/activate && \
 FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04 AS runtime
 
 ENV WORKDIR=/app
-ENV PATH="${WORKDIR}/venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 WORKDIR ${WORKDIR}
 
-# Install only runtime dependencies
+# Install only runtime dependencies (移除 python3.11-venv)
 RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
         python3.11 \
-        python3.11-venv \
         libgl1-mesa-glx \
         libglib2.0-0 \
         libgomp1 \
@@ -63,6 +61,9 @@ RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
 
 # Copy virtual environment from builder stage
 COPY --from=python-builder ${WORKDIR}/venv ${WORKDIR}/venv
+
+# 确保虚拟环境的激活脚本正确
+RUN chmod +x ${WORKDIR}/venv/bin/activate
 
 # Copy application code
 COPY YOLO-main-fire/ ./YOLO-main-fire/
@@ -80,6 +81,9 @@ RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 || true
 
 # Make startup script executable
 RUN chmod +x start_all.bash
+
+# 设置 PATH 在最后
+ENV PATH="${WORKDIR}/venv/bin:$PATH"
 
 # Expose gateway port
 EXPOSE 8080
