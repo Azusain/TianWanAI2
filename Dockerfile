@@ -14,6 +14,7 @@ RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
         python3.11 \
         python3.11-venv \
         python3.11-dev \
+        python3.11-distutils \
         gcc \
         g++ \
         cmake \
