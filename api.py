@@ -122,12 +122,19 @@ class YOLOXDetectionService:
             exp = get_exp(os.path.join(self.model_dir, self.exp_file), None)
             
             # Override num_classes based on model type
+            logger.info(f"original num_classes in exp file: {exp.num_classes}")
             if self.model_name == "fire":
                 exp.num_classes = 1  # only fire class
+                logger.info(f"set {self.model_name} num_classes to 1")
             elif "helmet" in self.model_name:
-                exp.num_classes = 2  # person + helmet
+                exp.num_classes = 2  # person + helmet  
+                logger.info(f"set {self.model_name} num_classes to 2")
             elif "safetybelt" in self.model_name:
                 exp.num_classes = 2  # person + safetybelt
+                logger.info(f"set {self.model_name} num_classes to 2")
+            else:
+                # Keep original exp.num_classes for unknown models
+                logger.warning(f"unknown model type: {self.model_name}, using default num_classes: {exp.num_classes}")
             
             # Get model
             model = exp.get_model()
