@@ -121,10 +121,10 @@ class SafetyBeltPredictor:
             self.model.load_state_dict(model_weights)
             logger.info(f"safetybelt checkpoint loaded successfully on {self.device}")
             
-            # Create predictor
+            # Create predictor - use VOC_CLASSES exactly like original demo
             device_str = self.device
             self.predictor = Predictor(
-                self.model, self.exp, ["person", "safetybelt"], None, None, device_str, False, False
+                self.model, self.exp, VOC_CLASSES, None, None, device_str, False, False
             )
             
         except Exception as e:
@@ -178,7 +178,7 @@ class SafetyBeltPredictor:
                 top_n = cyn - height_n / 2
                 
                 class_idx = int(cls[i])
-                class_name = "person" if class_idx == 0 else "safetybelt"
+                class_name = self.predictor.cls_names[class_idx] if class_idx < len(self.predictor.cls_names) else f"class_{class_idx}"
                 
                 results.append({
                     "score": float(scores[i]),
@@ -267,68 +267,64 @@ class SafetyBeltService:
     
     def predict_safetybelt_compliance(self, img):
         try:
-            # First detect persons
-            persons = self.person_detector.detect_persons(img)
-            if not persons:
+            # For safetybelt model, we don't need person detection first
+            # The model directly classifies person states: illegal(0) vs compliant(1)
+            
+            # Detect using safetybelt model directly
+            safetybelt_results, safetybelt_errno = self.safetybelt_detector.predict(img)
+            logger.info(f"safetybelt detection errno: {safetybelt_errno}, results count: {len(safetybelt_results) if safetybelt_results else 0}")
+            
+            if safetybelt_errno != 0 or not safetybelt_results:
+                logger.info("no safetybelt detection results")
                 return [], -4
             
-            # Then detect safety belts
-            safetybelt_results, safetybelt_errno = self.safetybelt_detector.predict(img)
+            # Log all safetybelt detection results
+            for i, item in enumerate(safetybelt_results):
+                logger.info(f"safetybelt result {i}: class={item['class']}, class_name='{item['class_name']}', score={item['score']:.3f}")
             
-            # Process results for each person
+            # Process each detection result
             final_results = []
             img_height, img_width = img.shape[:2]
             
-            for person in persons:
-                person_bbox = person["bbox"]
-                person_conf = person["confidence"]
+            for result_idx, safetybelt_item in enumerate(safetybelt_results):
+                class_idx = safetybelt_item["class"]
+                class_name = safetybelt_item["class_name"]
+                detection_score = safetybelt_item["score"]
                 
-                # Check if any safety belt overlaps with this person
-                has_safetybelt = False
-                max_safetybelt_score = 0.0
+                logger.info(f"processing safetybelt result {result_idx}: class={class_idx}, class_name='{class_name}', score={detection_score:.3f}")
                 
-                if safetybelt_errno == 0 and safetybelt_results:
-                    for safetybelt_item in safetybelt_results:
-                        if safetybelt_item["class_name"] == "safetybelt":
-                            # Convert normalized coordinates back to pixel coordinates
-                            loc = safetybelt_item["location"]
-                            safetybelt_x1 = int((loc["left"]) * img_width)
-                            safetybelt_y1 = int((loc["top"]) * img_height)
-                            safetybelt_x2 = int((loc["left"] + loc["width"]) * img_width)
-                            safetybelt_y2 = int((loc["top"] + loc["height"]) * img_height)
-                            safetybelt_bbox = [safetybelt_x1, safetybelt_y1, safetybelt_x2, safetybelt_y2]
-                            
-                            # Check IoU overlap
-                            iou = self.calculate_iou(person_bbox, safetybelt_bbox)
-                            if iou > 0.1:  # If there's some overlap
-                                has_safetybelt = True
-                                max_safetybelt_score = max(max_safetybelt_score, safetybelt_item["score"])
-                
-                # Calculate safety belt violation score (1 - safetybelt_score)
-                if has_safetybelt:
-                    violation_score = 1.0 - max_safetybelt_score
+                # Calculate violation score based on class
+                if class_idx == 0:  # "illegal" - person not wearing safetybelt
+                    violation_score = detection_score  # Use detection score directly
+                    has_safetybelt = False
+                    safetybelt_score = 0.0
+                    logger.info(f"illegal detection (no safetybelt), violation_score: {violation_score:.3f}")
+                elif class_idx == 1:  # "compliant" - person wearing safetybelt
+                    violation_score = 1.0 - detection_score  # Invert score
+                    has_safetybelt = True
+                    safetybelt_score = detection_score
+                    logger.info(f"compliant detection (has safetybelt), violation_score: {violation_score:.3f}")
                 else:
-                    violation_score = 1.0  # No safety belt detected = maximum violation
+                    logger.warning(f"unknown class {class_idx}, skipping")
+                    continue
                 
-                # Normalize person bbox coordinates
-                person_left = person_bbox[0] / img_width
-                person_top = person_bbox[1] / img_height
-                person_width = (person_bbox[2] - person_bbox[0]) / img_width
-                person_height = (person_bbox[3] - person_bbox[1]) / img_height
+                # Get normalized coordinates from detection
+                location = safetybelt_item["location"]
                 
                 final_results.append({
                     "score": violation_score,
-                    "person_confidence": person_conf,
+                    "person_confidence": 1.0,  # No separate person detection
                     "has_safetybelt": has_safetybelt,
-                    "safetybelt_score": max_safetybelt_score if has_safetybelt else 0.0,
+                    "safetybelt_score": safetybelt_score,
                     "location": {
-                        "left": person_left,
-                        "top": person_top,
-                        "width": person_width,
-                        "height": person_height
+                        "left": location["left"],
+                        "top": location["top"],
+                        "width": location["width"],
+                        "height": location["height"]
                     }
                 })
             
+            logger.info(f"final safetybelt results: {len(final_results)} detections processed")
             return final_results, 0
             
         except Exception as e:

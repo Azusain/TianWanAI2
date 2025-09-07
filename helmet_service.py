@@ -169,9 +169,9 @@ class HelmetPredictor:
             self.model.load_state_dict(ckpt)
             logger.info(f"helmet checkpoint loaded successfully on {self.device}")
             
-            # Create predictor
+            # Create predictor - use VOC_CLASSES exactly like original demo
             self.predictor = Predictor(
-                self.model, self.exp, ["person", "helmet"], None, None, self.device, False, False
+                self.model, self.exp, VOC_CLASSES, None, None, self.device, False, False
             )
             
         except Exception as e:
@@ -267,46 +267,61 @@ class HelmetService:
         try:
             # First detect persons
             persons = self.person_detector.detect_persons(img)
+            logger.info(f"detected {len(persons)} persons")
             if not persons:
                 return [], -4
             
-            # Then detect helmets
-            helmet_results, helmet_errno = self.helmet_detector.predict(img)
-            
-            # Process results for each person
+            # Process each person separately
             final_results = []
             img_height, img_width = img.shape[:2]
             
-            for person in persons:
+            for person_idx, person in enumerate(persons):
                 person_bbox = person["bbox"]
                 person_conf = person["confidence"]
+                logger.info(f"processing person {person_idx}: bbox={person_bbox}, conf={person_conf:.3f}")
                 
-                # Check if any helmet overlaps with this person
+                # Crop person region from image with some padding
+                x1, y1, x2, y2 = person_bbox
+                # Add padding (10% of bbox size)
+                padding_x = int((x2 - x1) * 0.1)
+                padding_y = int((y2 - y1) * 0.1)
+                crop_x1 = max(0, x1 - padding_x)
+                crop_y1 = max(0, y1 - padding_y)
+                crop_x2 = min(img_width, x2 + padding_x)
+                crop_y2 = min(img_height, y2 + padding_y)
+                
+                # Crop the person region
+                person_crop = img[crop_y1:crop_y2, crop_x1:crop_x2]
+                logger.info(f"cropped person {person_idx} region: ({crop_x1},{crop_y1}) to ({crop_x2},{crop_y2})")
+                
+                if person_crop.size == 0:
+                    logger.warning(f"empty crop for person {person_idx}, skipping")
+                    continue
+                
+                # Detect helmets in the cropped person region
+                helmet_results, helmet_errno = self.helmet_detector.predict(person_crop)
+                logger.info(f"helmet detection in person {person_idx} crop: errno={helmet_errno}, results={len(helmet_results) if helmet_results else 0}")
+                
+                # Check for helmet detection in the cropped region
                 has_helmet = False
                 max_helmet_score = 0.0
                 
                 if helmet_errno == 0 and helmet_results:
-                    for helmet_item in helmet_results:
-                        if helmet_item["class_name"] == "helmet":
-                            # Convert normalized coordinates back to pixel coordinates
-                            loc = helmet_item["location"]
-                            helmet_x1 = int((loc["left"]) * img_width)
-                            helmet_y1 = int((loc["top"]) * img_height)
-                            helmet_x2 = int((loc["left"] + loc["width"]) * img_width)
-                            helmet_y2 = int((loc["top"] + loc["height"]) * img_height)
-                            helmet_bbox = [helmet_x1, helmet_y1, helmet_x2, helmet_y2]
-                            
-                            # Check IoU overlap
-                            iou = self.calculate_iou(person_bbox, helmet_bbox)
-                            if iou > 0.1:  # If there's some overlap
-                                has_helmet = True
-                                max_helmet_score = max(max_helmet_score, helmet_item["score"])
+                    for helmet_idx, helmet_item in enumerate(helmet_results):
+                        logger.info(f"helmet result {helmet_idx}: class={helmet_item['class']}, class_name='{helmet_item['class_name']}', score={helmet_item['score']:.3f}")
+                        # Check for class 0 which is "hat" according to VOC_CLASSES
+                        if helmet_item["class"] == 0:
+                            has_helmet = True
+                            max_helmet_score = max(max_helmet_score, helmet_item["score"])
+                            logger.info(f"helmet detected for person {person_idx}, score: {helmet_item['score']:.3f}")
                 
-                # Calculate helmet violation score (1 - helmet_score)
+                # Calculate helmet violation score
                 if has_helmet:
                     violation_score = 1.0 - max_helmet_score
+                    logger.info(f"person {person_idx} has helmet, violation_score: {violation_score:.3f}")
                 else:
                     violation_score = 1.0  # No helmet detected = maximum violation
+                    logger.info(f"person {person_idx} no helmet detected, violation_score: 1.0")
                 
                 # Normalize person bbox coordinates
                 person_left = person_bbox[0] / img_width
@@ -327,6 +342,7 @@ class HelmetService:
                     }
                 })
             
+            logger.info(f"final helmet results: {len(final_results)} persons processed")
             return final_results, 0
             
         except Exception as e:
