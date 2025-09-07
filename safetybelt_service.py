@@ -107,8 +107,18 @@ class SafetyBeltPredictor:
             else:
                 ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
             
-            # Load the model state dict directly (original demo.py logic)
-            self.model.load_state_dict(ckpt)
+            # Handle training checkpoint format (has "model" key)
+            if "model" in ckpt:
+                # This is a training checkpoint, extract the model weights
+                model_weights = ckpt["model"]
+                logger.info("extracted model weights from training checkpoint")
+            else:
+                # Direct model weights
+                model_weights = ckpt
+                logger.info("using direct model weights")
+            
+            # Load the model state dict
+            self.model.load_state_dict(model_weights)
             logger.info(f"safetybelt checkpoint loaded successfully on {self.device}")
             
             # Create predictor
