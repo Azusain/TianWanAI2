@@ -27,9 +27,9 @@ SAFETYBELT_PID=$!
 # Wait for services to start
 sleep 5
 
-# Start unified gateway with gunicorn
+# Start API Gateway (use gateway.py instead of main.py)
 echo "Starting API Gateway on port 8080..."
-cd /root && gunicorn -w 1 --threads 1 -b 0.0.0.0:8080 'main:create_app()' &
+cd /root && python gateway.py &
 GATEWAY_PID=$!
 
 # Function to handle shutdown

@@ -102,10 +102,10 @@ class SafetyBeltPredictor:
             
             # Load checkpoint with appropriate device mapping
             if self.device == "cuda":
-                ckpt = torch.load(ckpt_path, map_location="cuda")
+                ckpt = torch.load(ckpt_path, map_location="cuda", weights_only=False)
                 self.model = self.model.cuda()
             else:
-                ckpt = torch.load(ckpt_path, map_location="cpu")
+                ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
             
             # Load model state dict
             self.model.load_state_dict(ckpt)
