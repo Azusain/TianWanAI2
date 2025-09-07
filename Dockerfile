@@ -35,12 +35,6 @@ COPY YOLO-main-fire ./YOLO-main-fire
 COPY YOLO-main-helmet ./YOLO-main-helmet
 COPY YOLO-main-safetybelt ./YOLO-main-safetybelt
 
-# Debug: Check if weight files were copied
-RUN echo "Checking copied files:" && \
-    ls -la YOLO-main-fire/ && \
-    ls -la YOLO-main-fire/weights/ || echo "weights dir missing" && \
-    ls -la YOLO-main-helmet/weights/ || echo "helmet weights dir missing" && \
-    ls -la YOLO-main-safetybelt/weights/ || echo "safetybelt weights dir missing"
 
 # Install YOLOX
 RUN cd YOLO-main-fire && pip install -e .
