@@ -2,7 +2,7 @@
 # Stage 1: Python dependencies builder
 FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04 AS python-builder
 
-ENV WORKDIR=/app
+ENV WORKDIR=/root
 WORKDIR ${WORKDIR}
 
 # Install Python and create virtual environment
@@ -24,6 +24,11 @@ COPY YOLO-main-fire/requirements.txt ./fire-requirements.txt
 COPY YOLO-main-helmet/requirements.txt ./helmet-requirements.txt
 COPY YOLO-main-safetybelt/requirements.txt ./safetybelt-requirements.txt
 
+# Copy YOLO projects for installation
+COPY YOLO-main-fire/ ./YOLO-main-fire/
+COPY YOLO-main-helmet/ ./YOLO-main-helmet/
+COPY YOLO-main-safetybelt/ ./YOLO-main-safetybelt/
+
 # Install Python dependencies using virtual environment activation
 RUN . venv/bin/activate && \
     pip install --no-cache-dir --upgrade pip setuptools wheel && \
@@ -32,6 +37,10 @@ RUN . venv/bin/activate && \
     pip install --no-cache-dir -r fire-requirements.txt && \
     pip install --no-cache-dir -r helmet-requirements.txt && \
     pip install --no-cache-dir -r safetybelt-requirements.txt && \
+    # Install YOLO packages
+    cd YOLO-main-fire && pip install --no-cache-dir -e . && cd .. && \
+    cd YOLO-main-helmet && pip install --no-cache-dir -e . && cd .. && \
+    cd YOLO-main-safetybelt && pip install --no-cache-dir -e . && cd .. && \
     # Clean up unnecessary files in venv
     find venv -name "*.pyc" -delete && \
     find venv -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true && \
@@ -42,7 +51,7 @@ RUN . venv/bin/activate && \
 # Stage 2: Final runtime image
 FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04 AS runtime
 
-ENV WORKDIR=/app
+ENV WORKDIR=/root
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 WORKDIR ${WORKDIR}

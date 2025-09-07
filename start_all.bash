@@ -1,5 +1,5 @@
 #!/bin/bash
-source /app/venv/bin/activate
+source /root/venv/bin/activate
 
 echo "Starting TianWan AI Detection Services..."
 
