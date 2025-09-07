@@ -31,116 +31,73 @@ class ServiceStatus(Enum):
         }
         return status_map.get(errno, 'UNKNOWN_ERROR')
 
-# Load the original working Predictor class from each model directory
-def load_original_predictor(model_dir):
-    """Load the original Predictor class from the specific YOLO model directory with better isolation"""
-    original_path = sys.path.copy()
-    cached_modules = {}
-    
-    try:
-        # Store and remove conflicting modules from sys.modules
-        modules_to_isolate = [
-            'yolox', 'yolox.data', 'yolox.data.data_augment', 'yolox.data.datasets',
-            'yolox.exp', 'yolox.utils', 'yolox.models', 'yolox.models.yolo_head',
-            'yolox.models.yolo_pafpn', 'yolox.models.network_blocks', 'yolox.models.darknet',
-            'yolox.models.yolox'
-        ]
-        
-        for module_name in modules_to_isolate:
-            if module_name in sys.modules:
-                cached_modules[module_name] = sys.modules[module_name]
-                del sys.modules[module_name]
-        
-        # Clear sys.path and add only the model directory
-        sys.path.clear()
-        sys.path.append(model_dir)
-        # Add back essential Python paths
-        import sysconfig
-        sys.path.extend([
-            sysconfig.get_path('stdlib'),
-            sysconfig.get_path('platstdlib'), 
-            sysconfig.get_path('purelib'),
-            sysconfig.get_path('platlib')
-        ])
-        
-        # Import the modules fresh
-        from yolox.data.data_augment import ValTransform
-        from yolox.data.datasets import VOC_CLASSES
-        from yolox.exp import get_exp
-        from yolox.utils import get_model_info, postprocess
-        
-        # Define the Predictor class from the original demo
-        class Predictor(object):
-            def __init__(
-                self,
-                model,
-                exp,
-                cls_names=VOC_CLASSES,
-                trt_file=None,
-                decoder=None,
-                device="cpu",
-                fp16=False,
-                legacy=False,
-            ):
-                self.model = model
-                self.cls_names = cls_names
-                self.decoder = decoder
-                self.num_classes = exp.num_classes
-                self.confthre = exp.test_conf
-                self.nmsthre = exp.nmsthre
-                self.test_size = exp.test_size
-                self.device = device
-                self.fp16 = fp16
-                self.preproc = ValTransform(legacy=legacy)
-                self.postprocess = postprocess  # Store reference to the specific postprocess function
+# Simple direct imports - no complex module isolation needed
+from yolox.data.data_augment import ValTransform
+from yolox.data.datasets import VOC_CLASSES
+from yolox.exp import get_exp
+from yolox.utils import get_model_info, postprocess
 
-            def inference(self, img):
-                img_info = {"id": 0}
-                if isinstance(img, str):
-                    img_info["file_name"] = os.path.basename(img)
-                    img = cv2.imread(img)
-                else:
-                    img_info["file_name"] = None
+def get_predictor_class():
+    """Return the simple Predictor class"""
+    class Predictor(object):
+        def __init__(
+            self,
+            model,
+            exp,
+            cls_names=VOC_CLASSES,
+            trt_file=None,
+            decoder=None,
+            device="cpu",
+            fp16=False,
+            legacy=False,
+        ):
+            self.model = model
+            self.cls_names = cls_names
+            self.decoder = decoder
+            self.num_classes = exp.num_classes
+            self.confthre = exp.test_conf
+            self.nmsthre = exp.nmsthre
+            self.test_size = exp.test_size
+            self.device = device
+            self.fp16 = fp16
+            self.preproc = ValTransform(legacy=legacy)
 
-                height, width = img.shape[:2]
-                img_info["height"] = height
-                img_info["width"] = width
-                img_info["raw_img"] = img
+        def inference(self, img):
+            img_info = {"id": 0}
+            if isinstance(img, str):
+                img_info["file_name"] = os.path.basename(img)
+                img = cv2.imread(img)
+            else:
+                img_info["file_name"] = None
 
-                ratio = min(self.test_size[0] / img.shape[0], self.test_size[1] / img.shape[1])
-                img_info["ratio"] = ratio
-                img, _ = self.preproc(img, None, self.test_size)
-                img = torch.from_numpy(img).unsqueeze(0)
-                img = img.float()
-                if self.device == "gpu":
-                    img = img.cuda()
-                    if self.fp16:
-                        img = img.half()  # to FP16
+            height, width = img.shape[:2]
+            img_info["height"] = height
+            img_info["width"] = width
+            img_info["raw_img"] = img
 
-                with torch.no_grad():
-                    t0 = time.time()
-                    outputs = self.model(img)
-                    if self.decoder is not None:
-                        outputs = self.decoder(outputs, dtype=outputs.type())
-                    outputs = self.postprocess(
-                        outputs, self.num_classes, self.confthre,
-                        self.nmsthre, class_agnostic=True
-                    )
-                    logger.info("infer time: {:.4f}s".format(time.time() - t0))
-                return outputs, img_info
+            ratio = min(self.test_size[0] / img.shape[0], self.test_size[1] / img.shape[1])
+            img_info["ratio"] = ratio
+            img, _ = self.preproc(img, None, self.test_size)
+            img = torch.from_numpy(img).unsqueeze(0)
+            img = img.float()
+            if self.device == "gpu":
+                img = img.cuda()
+                if self.fp16:
+                    img = img.half()
 
-        return Predictor, get_exp, get_model_info
-        
-    except ImportError as e:
-        logger.error(f"failed to import from {model_dir}: {e}")
-        raise
-    finally:
-        # Restore original sys.path
-        sys.path = original_path
-        
-        # Restore cached modules
-        for module_name, module in cached_modules.items():
-            sys.modules[module_name] = module
+            with torch.no_grad():
+                t0 = time.time()
+                outputs = self.model(img)
+                if self.decoder is not None:
+                    outputs = self.decoder(outputs, dtype=outputs.type())
+                outputs = postprocess(
+                    outputs, self.num_classes, self.confthre,
+                    self.nmsthre, class_agnostic=True
+                )
+                logger.info("infer time: {:.4f}s".format(time.time() - t0))
+            return outputs, img_info
+
+    return Predictor
 
 class YOLOXDetectionService:
     def __init__(self, model_name, model_dir, exp_file, ckpt_file, device=None):
@@ -158,8 +115,8 @@ class YOLOXDetectionService:
     
     def _load_model(self):
         try:
-            # Load the original predictor class from the model directory
-            Predictor, get_exp, get_model_info = load_original_predictor(self.model_dir)
+            # Get the simple predictor class
+            Predictor = get_predictor_class()
             
             # Get experiment configuration
             exp = get_exp(os.path.join(self.model_dir, self.exp_file), None)
