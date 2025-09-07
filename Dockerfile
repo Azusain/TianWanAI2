@@ -22,7 +22,7 @@ RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
         libglib2.0-0 \
         libgomp1 \
         && \
-    python3.11 -m venv venv && \
+    python3.11 -m venv --system-site-packages venv && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
