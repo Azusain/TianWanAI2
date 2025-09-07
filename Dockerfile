@@ -53,6 +53,7 @@ RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
         python3.11 \
+        python3.11-venv \
         libgl1-mesa-glx \
         libglib2.0-0 \
         libgomp1 \
