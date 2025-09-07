@@ -53,4 +53,4 @@ temp/
 *.mov
 *.mkv
 dataset/
-data/
+# data/ - commented out to allow YOLO data modules
