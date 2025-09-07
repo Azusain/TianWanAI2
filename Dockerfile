@@ -43,9 +43,8 @@ COPY YOLO-main-fire/ ./YOLO-main-fire/
 COPY YOLO-main-helmet/ ./YOLO-main-helmet/
 COPY YOLO-main-safetybelt/ ./YOLO-main-safetybelt/
 
-RUN cd YOLO-main-fire && pip install -e . && cd .. && \
-    cd YOLO-main-helmet && pip install -e . && cd .. && \
-    cd YOLO-main-safetybelt && pip install -e . && cd ..
+# Install only one YOLOX package to avoid conflicts (they're all similar)
+RUN . venv/bin/activate && cd YOLO-main-fire && pip install -e . && cd .. && pip list | grep yolox
 
 # Copy remaining application code
 COPY models/ ./models/
@@ -53,6 +52,8 @@ COPY fire_service.py ./
 COPY helmet_service.py ./
 COPY safetybelt_service.py ./
 COPY gateway.py ./
+COPY main.py ./
+COPY api.py ./
 COPY start_all.bash ./
 
 # Create symlink for python

@@ -7,44 +7,21 @@ echo "Starting TianWan AI Detection Services..."
 echo "Using python: $(which python)"
 echo "Python version: $(python --version)"
 
+# Debug: Check YOLOX installation
+echo "Checking YOLOX installation:"
+python -c "import yolox; print('YOLOX version:', yolox.__version__)" || echo "YOLOX not installed"
+python -c "import yolox.data; print('YOLOX data module loaded successfully')" || echo "YOLOX data module not found"
+
 # Verify critical dependencies
 python -c "import numpy, cv2, torch, requests, flask; print('All dependencies verified')" || {
     echo "ERROR: Dependencies missing!"
     exit 1
 }
 
-# Start fire detection service in background
-echo "Starting Fire Detection Service on port 8901..."
-python fire_service.py &
-FIRE_PID=$!
+# Install gunicorn if not present
+pip show gunicorn > /dev/null 2>&1 || pip install gunicorn
 
-# Start helmet safety service in background  
-echo "Starting Helmet Safety Service on port 8902..."
-python helmet_service.py &
-HELMET_PID=$!
-
-# Start safetybelt compliance service in background
-echo "Starting Safety Belt Service on port 8903..."
-python safetybelt_service.py &
-SAFETYBELT_PID=$!
-
-# Wait a moment for services to start
-sleep 5
-
-# Start API gateway (foreground)
-echo "Starting API Gateway on port 8080..."
-python gateway.py &
-GATEWAY_PID=$!
-
-# Function to handle shutdown
-shutdown() {
-    echo "Shutting down services..."
-    kill $FIRE_PID $HELMET_PID $SAFETYBELT_PID $GATEWAY_PID 2>/dev/null
-    exit 0
-}
-
-# Trap signals
-trap shutdown SIGINT SIGTERM
-
-# Wait for all processes
-wait
+# Start unified application with gunicorn
+echo "Starting unified TianWan AI service on port 8080 with gunicorn..."
+NPROC=${NPROC:-1}
+gunicorn -w $NPROC --threads 1 -b 0.0.0.0:8080 'main:create_app()'
