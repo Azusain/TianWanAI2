@@ -30,10 +30,12 @@ COPY requirements.txt ./
 RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126 && \
     pip install -r requirements.txt
 
-# Copy YOLO projects and install YOLOX
-COPY YOLO-main-fire/ ./YOLO-main-fire/
-COPY YOLO-main-helmet/ ./YOLO-main-helmet/
-COPY YOLO-main-safetybelt/ ./YOLO-main-safetybelt/
+# Copy YOLO projects completely
+COPY YOLO-main-fire ./YOLO-main-fire
+COPY YOLO-main-helmet ./YOLO-main-helmet
+COPY YOLO-main-safetybelt ./YOLO-main-safetybelt
+
+# Install YOLOX
 RUN cd YOLO-main-fire && pip install -e .
 
 # Copy application code
