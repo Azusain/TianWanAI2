@@ -54,6 +54,7 @@ COPY safetybelt_service.py ./
 COPY gateway.py ./
 COPY main.py ./
 COPY api.py ./
+COPY test_yolox.py ./
 COPY start_all.bash ./
 
 # Create symlink for python
