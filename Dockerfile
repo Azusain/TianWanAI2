@@ -1,4 +1,4 @@
-# TianWan AI Detection Services Docker Image
+# TianWan AI Detection Microservices Docker Image
 FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04
 
 ENV WORKDIR=/root
@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 WORKDIR ${WORKDIR}
 
-# Install system dependencies
+# Install system dependencies with all Python standard library components
 RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -29,32 +29,29 @@ RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
 # Copy and install Python dependencies
 COPY requirements.txt ./
 RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126 && \
-    pip install -r requirements.txt
+    pip install -r requirements.txt && \
+    pip install requests gunicorn
 
-# Copy YOLO projects completely
+# Copy YOLO projects to their own directories
 COPY YOLO-main-fire ./YOLO-main-fire
 COPY YOLO-main-helmet ./YOLO-main-helmet
 COPY YOLO-main-safetybelt ./YOLO-main-safetybelt
 
+# Install YOLOX in editable mode for each project
+RUN cd YOLO-main-fire && pip install -e . && \
+    cd ../YOLO-main-helmet && pip install -e . && \
+    cd ../YOLO-main-safetybelt && pip install -e .
 
-# Install YOLOX
-RUN cd YOLO-main-fire && pip install -e .
-
-# Copy application code
+# Copy models and services
 COPY models/ ./models/
-COPY *.py ./
+COPY fire_service.py helmet_service.py safetybelt_service.py gateway.py ./
 COPY start_microservices.bash ./
-
-# Create symlink for python
-RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 || true
 
 # Make startup script executable
 RUN chmod +x start_microservices.bash
 
-# 设置 PATH 在最后
-ENV PATH="${WORKDIR}/venv/bin:$PATH"
-
 # Expose all service ports
 EXPOSE 8080 8901 8902 8903
 
+# Use microservices architecture
 CMD ["bash", "start_microservices.bash"]
