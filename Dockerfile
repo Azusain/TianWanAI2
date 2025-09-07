@@ -38,10 +38,16 @@ RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/c
     pip install -r helmet-requirements.txt && \
     pip install -r safetybelt-requirements.txt
 
-# Copy application code
+# Install YOLOX packages after copying the code
 COPY YOLO-main-fire/ ./YOLO-main-fire/
 COPY YOLO-main-helmet/ ./YOLO-main-helmet/
 COPY YOLO-main-safetybelt/ ./YOLO-main-safetybelt/
+
+RUN cd YOLO-main-fire && pip install -e . && cd .. && \
+    cd YOLO-main-helmet && pip install -e . && cd .. && \
+    cd YOLO-main-safetybelt && pip install -e . && cd ..
+
+# Copy remaining application code
 COPY models/ ./models/
 COPY fire_service.py ./
 COPY helmet_service.py ./
