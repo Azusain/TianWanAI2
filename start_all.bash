@@ -13,4 +13,5 @@ python -c "import numpy, cv2, torch, requests, flask, yolox; print('All dependen
 # Start unified application with gunicorn
 echo "Starting unified TianWan AI service on port 8080..."
 NPROC=${NPROC:-1}
+echo "Using $NPROC worker(s)"
 gunicorn -w $NPROC --threads 1 -b 0.0.0.0:8080 'main:create_app()'

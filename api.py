@@ -121,6 +121,14 @@ class YOLOXDetectionService:
             # Get experiment configuration
             exp = get_exp(os.path.join(self.model_dir, self.exp_file), None)
             
+            # Override num_classes based on model type
+            if self.model_name == "fire":
+                exp.num_classes = 1  # only fire class
+            elif "helmet" in self.model_name:
+                exp.num_classes = 2  # person + helmet
+            elif "safetybelt" in self.model_name:
+                exp.num_classes = 2  # person + safetybelt
+            
             # Get model
             model = exp.get_model()
             logger.info(f"model summary for {self.model_name}: {get_model_info(model, exp.test_size)}")
