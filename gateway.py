@@ -156,6 +156,10 @@ def list_models():
         ]
     })
 
+# WSGI application for gunicorn
+def create_app():
+    return app
+
 if __name__ == '__main__':
     logger.info("starting API gateway on port 8080...")
     logger.info("routing table:")

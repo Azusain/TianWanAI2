@@ -27,9 +27,9 @@ SAFETYBELT_PID=$!
 # Wait for services to start
 sleep 10
 
-# Start API Gateway (use gateway.py with Flask dev server for now)
+# Start API Gateway with gunicorn
 echo "Starting API Gateway on port 8080..."
-cd /root && python gateway.py &
+cd /root && gunicorn --bind 0.0.0.0:8080 --workers 1 --timeout 300 gateway:app &
 GATEWAY_PID=$!
 
 # Function to handle shutdown
