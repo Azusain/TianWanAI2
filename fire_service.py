@@ -25,7 +25,7 @@ from yolox.utils import get_model_info, postprocess
 def get_device():
     """Auto-detect device: prefer CUDA, fallback to CPU"""
     if torch.cuda.is_available():
-        device = "cuda"
+        device = "gpu"  # Use "gpu" for YOLOX compatibility
         logger.info(f"using GPU device: {torch.cuda.get_device_name()}")
     else:
         device = "cpu"
@@ -58,18 +58,18 @@ class FirePredictor:
             logger.info(f"loading fire checkpoint: {ckpt_path}")
             
             # Load checkpoint with appropriate device mapping
-            if self.device == "cuda":
+            if self.device == "gpu":
                 ckpt = torch.load(ckpt_path, map_location="cuda")
                 self.model = self.model.cuda()
             else:
                 ckpt = torch.load(ckpt_path, map_location="cpu")
             
-            # Load model state dict
+            # Load model state dict directly (original demo.py logic)
             self.model.load_state_dict(ckpt)
             logger.info(f"fire checkpoint loaded successfully on {self.device}")
             
             # Create predictor
-            device_str = "gpu" if self.device == "cuda" else "cpu"
+            device_str = self.device
             self.predictor = Predictor(
                 self.model, self.exp, ["fire"], None, None, device_str, False, False
             )
@@ -243,6 +243,10 @@ def predict():
 def health():
     """Health check endpoint"""
     return jsonify({"status": "healthy", "model": "fire"})
+
+# WSGI application for gunicorn
+def create_app():
+    return app
 
 if __name__ == '__main__':
     logger.info("starting fire detection service on port 8901...")

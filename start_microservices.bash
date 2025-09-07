@@ -11,23 +11,23 @@ python -c "import numpy, cv2, torch, flask, yolox; print('All dependencies verif
 
 # Start fire detection service
 echo "Starting Fire Detection Service on port 8901..."
-cd /root/YOLO-main-fire && python /root/fire_service.py &
+cd /root && gunicorn --bind 0.0.0.0:8901 --workers 1 --timeout 300 fire_service:app &
 FIRE_PID=$!
 
 # Start helmet detection service  
 echo "Starting Helmet Detection Service on port 8902..."
-cd /root/YOLO-main-helmet && python /root/helmet_service.py &
+cd /root && gunicorn --bind 0.0.0.0:8902 --workers 1 --timeout 300 helmet_service:app &
 HELMET_PID=$!
 
 # Start safetybelt detection service
 echo "Starting Safetybelt Detection Service on port 8903..."
-cd /root/YOLO-main-safetybelt && python /root/safetybelt_service.py &
+cd /root && gunicorn --bind 0.0.0.0:8903 --workers 1 --timeout 300 safetybelt_service:app &
 SAFETYBELT_PID=$!
 
 # Wait for services to start
-sleep 5
+sleep 10
 
-# Start API Gateway (use gateway.py instead of main.py)
+# Start API Gateway (use gateway.py with Flask dev server for now)
 echo "Starting API Gateway on port 8080..."
 cd /root && python gateway.py &
 GATEWAY_PID=$!

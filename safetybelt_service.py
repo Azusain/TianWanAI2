@@ -26,7 +26,7 @@ from yolox.utils import get_model_info, postprocess
 def get_device():
     """Auto-detect device: prefer CUDA, fallback to CPU"""
     if torch.cuda.is_available():
-        device = "cuda"
+        device = "gpu"  # Use "gpu" for YOLOX compatibility
         logger.info(f"using GPU device: {torch.cuda.get_device_name()}")
     else:
         device = "cpu"
@@ -46,7 +46,7 @@ class PersonDetector:
             self.model = YOLO(model_path)
             
             # Move model to appropriate device
-            if self.device == "cuda":
+            if self.device == "gpu":
                 self.model.to("cuda")
                 
             logger.info(f"person detection model loaded successfully on {self.device}")
@@ -101,18 +101,18 @@ class SafetyBeltPredictor:
             logger.info(f"loading safetybelt checkpoint: {ckpt_path}")
             
             # Load checkpoint with appropriate device mapping
-            if self.device == "cuda":
+            if self.device == "gpu":
                 ckpt = torch.load(ckpt_path, map_location="cuda", weights_only=False)
                 self.model = self.model.cuda()
             else:
                 ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
             
-            # Load model state dict
+            # Load the model state dict directly (original demo.py logic)
             self.model.load_state_dict(ckpt)
             logger.info(f"safetybelt checkpoint loaded successfully on {self.device}")
             
             # Create predictor
-            device_str = "gpu" if self.device == "cuda" else "cpu"
+            device_str = self.device
             self.predictor = Predictor(
                 self.model, self.exp, ["person", "safetybelt"], None, None, device_str, False, False
             )
@@ -380,6 +380,10 @@ def predict():
 def health():
     """Health check endpoint"""
     return jsonify({"status": "healthy", "model": "safetybelt_compliance"})
+
+# WSGI application for gunicorn
+def create_app():
+    return app
 
 if __name__ == '__main__':
     logger.info("starting safety belt compliance detection service on port 8903...")
