@@ -19,7 +19,7 @@ networkx==3.2.1
 ninja==1.13.0
 numpy==2.0.2
 onnx==1.19.0
-onnx-simplifier==0.4.10
+onnx-simplifier>=0.4.10
 opencv-python==4.12.0.88
 packaging==25.0
 pillow==11.3.0
