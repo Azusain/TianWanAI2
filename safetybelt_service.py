@@ -97,7 +97,7 @@ class SafetyBeltPredictor:
             self.model.eval()
             
             # Load checkpoint
-            ckpt_path = os.path.join(safetybelt_yolo_path, "weights/best.pth")
+            ckpt_path = os.path.join(safetybelt_yolo_path, "weights/best_ckpt.pth")
             logger.info(f"loading safetybelt checkpoint: {ckpt_path}")
             
             # Load checkpoint with appropriate device mapping
