@@ -7,6 +7,7 @@ import numpy as np
 import cv2
 import torch
 import time
+import math
 from flask import Flask, request, jsonify
 from loguru import logger
 from uuid import uuid4
@@ -203,7 +204,8 @@ class HelmetPredictor:
         bboxes = output[:, 0:4]
         bboxes /= ratio
         cls = output[:, 6]
-        scores = output[:, 4] * output[:, 5]
+        # Use only class confidence for helmet detection
+        scores = output[:, 5]
         
         results = []
         for i in range(len(cls)):
