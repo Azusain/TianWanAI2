@@ -194,7 +194,7 @@ class HelmetPredictor:
             logger.error(f"helmet prediction error: {e}")
             return None, -5
     
-    def _convert_to_api_format(self, output, img_info, cls_conf=0.35):
+    def _convert_to_api_format(self, output, img_info, cls_conf=0.0):
         ratio = img_info["ratio"]
         if output is None:
             return []

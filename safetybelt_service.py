@@ -147,7 +147,7 @@ class SafetyBeltPredictor:
             logger.error(f"safetybelt prediction error: {e}")
             return None, -5
     
-    def _convert_to_api_format(self, output, img_info, cls_conf=0.35):
+    def _convert_to_api_format(self, output, img_info, cls_conf=0.0):
         ratio = img_info["ratio"]
         if output is None:
             return []
@@ -286,58 +286,66 @@ class SafetyBeltService:
                 
                 # Step 5: Process the compliance detection results for this person
                 found_compliance_detection = False
-                max_alert_score = 0.0  # 维护最大告警值
+                max_alert_score = 1.0  # Default: maximum danger (assume no safety belt)
+                safety_belt_status = "NO_DETECTION"
                 
                 if safetybelt_errno == 0 and safetybelt_results:
-                    # 遍历这个人区域内的所有检测结果
+                    # Process all detection results in this person's region
+                    best_confidence = 0.0
+                    best_class_id = -1
+                    
+                    # Find the detection result with highest confidence
                     for safety_detection in safetybelt_results:
                         found_compliance_detection = True
                         class_id = safety_detection["class"]
                         confidence = safety_detection["score"]
                         class_name = safety_detection["class_name"]
                         
-                        logger.info(f"  person {person_idx} detection: class={class_id}({class_name}), score={confidence:.3f}")
+                        logger.info(f"  person {person_idx} detection: class={class_id}({class_name}), confidence={confidence:.3f}")
                         
-                        if class_id == 0:  # "illegal" - 不合规
-                            # 不合规检测：直接用置信度作为告警值
-                            current_alert_score = confidence
-                            logger.info(f"    -> illegal detection, alert_score = {current_alert_score:.3f}")
-                        elif class_id == 1:  # "compliant" - 合规
-                            # 合规检测：用 1 - 置信度 作为告警值
-                            current_alert_score = 1.0 - confidence
-                            logger.info(f"    -> compliant detection, alert_score = 1.0 - {confidence:.3f} = {current_alert_score:.3f}")
-                        else:
-                            logger.warning(f"    -> unknown class {class_id}, skipping")
-                            continue
-                        
-                        # 保留最大告警值
-                        if current_alert_score > max_alert_score:
-                            max_alert_score = current_alert_score
-                            logger.info(f"    -> new max alert_score: {max_alert_score:.3f}")
-                
-                # Step 6: 只返回有合规检测结果的人员
-                if found_compliance_detection and max_alert_score > 0:
-                    # 归一化人员边界框坐标（使用原始人员边界框）
-                    person_left = person_bbox[0] / img_width
-                    person_top = person_bbox[1] / img_height
-                    person_width = (person_bbox[2] - person_bbox[0]) / img_width
-                    person_height = (person_bbox[3] - person_bbox[1]) / img_height
+                        # Record the highest confidence detection
+                        if confidence > best_confidence:
+                            best_confidence = confidence
+                            best_class_id = class_id
                     
-                    final_results.append({
-                        "score": max_alert_score,  # 最大告警值
-                        "person_confidence": person_conf,
-                        "has_compliance_detection": found_compliance_detection,
-                        "location": {
-                            "left": person_left,
-                            "top": person_top,
-                            "width": person_width,
-                            "height": person_height
-                        }
-                    })
+                    # Calculate alert score based on best detection result
+                    if best_class_id == 0:  # "illegal" - explicitly detected non-compliant
+                        max_alert_score = max(0.8, best_confidence)  # Non-compliant gets at least 0.8 alert score
+                        safety_belt_status = "NON-COMPLIANT"
+                        logger.info(f"  person {person_idx} -> NON-COMPLIANT (no safety belt): confidence={best_confidence:.3f}, alert_score={max_alert_score:.3f}")
+                    elif best_class_id == 1:  # "compliant" - detected wearing safety belt
+                        max_alert_score = max(0.0, 1.0 - best_confidence)  # Higher compliance confidence = lower alert
+                        safety_belt_status = "COMPLIANT"
+                        logger.info(f"  person {person_idx} -> COMPLIANT (wearing safety belt): confidence={best_confidence:.3f}, alert_score=1.0-{best_confidence:.3f}={max_alert_score:.3f}")
                     
-                    logger.info(f"person {person_idx} final result: max_alert_score={max_alert_score:.3f}")
+                    logger.info(f"    -> best detection result: class={best_class_id}, confidence={best_confidence:.3f}, final_alert_score={max_alert_score:.3f}")
                 else:
-                    logger.info(f"person {person_idx}: no compliance detection, skipping")
+                    # No safety belt detection found = maximum danger
+                    max_alert_score = 1.0
+                    safety_belt_status = "NO_DETECTION"
+                    logger.info(f"  person {person_idx} -> NO SAFETYBELT DETECTION: assuming maximum danger, alert_score=1.0")
+                
+                # Step 6: Return results for ALL detected persons (including those with no safety belt detection)
+                # Normalize person bounding box coordinates (using original person bbox)
+                person_left = person_bbox[0] / img_width
+                person_top = person_bbox[1] / img_height
+                person_width = (person_bbox[2] - person_bbox[0]) / img_width
+                person_height = (person_bbox[3] - person_bbox[1]) / img_height
+                
+                final_results.append({
+                    "score": max_alert_score,  # Alert score
+                    "person_confidence": person_conf,
+                    "has_compliance_detection": found_compliance_detection,
+                    "safety_belt_status": safety_belt_status,  # Add status information
+                    "location": {
+                        "left": person_left,
+                        "top": person_top,
+                        "width": person_width,
+                        "height": person_height
+                    }
+                })
+                
+                logger.info(f"person {person_idx} final result: alert_score={max_alert_score:.3f}, status={safety_belt_status}")
             
             logger.info(f"final safetybelt results: {len(final_results)} persons with detections")
             return final_results, 0
