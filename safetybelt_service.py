@@ -248,83 +248,98 @@ class SafetyBeltService:
         self.person_detector = PersonDetector()
         self.safetybelt_detector = SafetyBeltPredictor()
     
-    def calculate_iou(self, box1, box2):
-        """Calculate IoU between two bounding boxes"""
-        x1 = max(box1[0], box2[0])
-        y1 = max(box1[1], box2[1])
-        x2 = min(box1[2], box2[2])
-        y2 = min(box1[3], box2[3])
-        
-        if x2 <= x1 or y2 <= y1:
-            return 0.0
-        
-        intersection = (x2 - x1) * (y2 - y1)
-        area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
-        area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
-        union = area1 + area2 - intersection
-        
-        return intersection / union if union > 0 else 0.0
-    
     def predict_safetybelt_compliance(self, img):
         try:
-            # For safetybelt model, we don't need person detection first
-            # The model directly classifies person states: illegal(0) vs compliant(1)
-            
-            # Detect using safetybelt model directly
-            safetybelt_results, safetybelt_errno = self.safetybelt_detector.predict(img)
-            logger.info(f"safetybelt detection errno: {safetybelt_errno}, results count: {len(safetybelt_results) if safetybelt_results else 0}")
-            
-            if safetybelt_errno != 0 or not safetybelt_results:
-                logger.info("no safetybelt detection results")
+            # Step 1: First detect all persons in the image
+            persons = self.person_detector.detect_persons(img)
+            if not persons:
+                logger.info("no persons detected")
                 return [], -4
             
-            # Log all safetybelt detection results
-            for i, item in enumerate(safetybelt_results):
-                logger.info(f"safetybelt result {i}: class={item['class']}, class_name='{item['class_name']}', score={item['score']:.3f}")
-            
-            # Process each detection result
+            logger.info(f"detected {len(persons)} persons")
             final_results = []
             img_height, img_width = img.shape[:2]
             
-            for result_idx, safetybelt_item in enumerate(safetybelt_results):
-                class_idx = safetybelt_item["class"]
-                class_name = safetybelt_item["class_name"]
-                detection_score = safetybelt_item["score"]
+            # Step 2: For each detected person, check compliance in their region
+            for person_idx, person in enumerate(persons):
+                person_bbox = person["bbox"]
+                person_conf = person["confidence"]
                 
-                logger.info(f"processing safetybelt result {result_idx}: class={class_idx}, class_name='{class_name}', score={detection_score:.3f}")
+                logger.info(f"person {person_idx}: bbox={person_bbox}, conf={person_conf:.3f}")
                 
-                # Calculate violation score based on class
-                if class_idx == 0:  # "illegal" - person not wearing safetybelt
-                    violation_score = detection_score  # Use detection score directly
-                    has_safetybelt = False
-                    safetybelt_score = 0.0
-                    logger.info(f"illegal detection (no safetybelt), violation_score: {violation_score:.3f}")
-                elif class_idx == 1:  # "compliant" - person wearing safetybelt
-                    violation_score = 1.0 - detection_score  # Invert score
-                    has_safetybelt = True
-                    safetybelt_score = detection_score
-                    logger.info(f"compliant detection (has safetybelt), violation_score: {violation_score:.3f}")
+                # Step 3: Crop this person's region from the original image
+                x1, y1, x2, y2 = person_bbox
+                # Add padding to ensure we capture the full person area
+                padding = 20
+                crop_x1 = max(0, x1 - padding)
+                crop_y1 = max(0, y1 - padding) 
+                crop_x2 = min(img_width, x2 + padding)
+                crop_y2 = min(img_height, y2 + padding)
+                
+                # Crop the person's region
+                person_region = img[crop_y1:crop_y2, crop_x1:crop_x2]
+                
+                # Step 4: Run safety belt compliance detection on this person's region
+                safetybelt_results, safetybelt_errno = self.safetybelt_detector.predict(person_region)
+                
+                logger.info(f"person {person_idx} region detection: errno={safetybelt_errno}, results count={len(safetybelt_results) if safetybelt_results else 0}")
+                
+                # Step 5: Process the compliance detection results for this person
+                found_compliance_detection = False
+                max_alert_score = 0.0  # 维护最大告警值
+                
+                if safetybelt_errno == 0 and safetybelt_results:
+                    # 遍历这个人区域内的所有检测结果
+                    for safety_detection in safetybelt_results:
+                        found_compliance_detection = True
+                        class_id = safety_detection["class"]
+                        confidence = safety_detection["score"]
+                        class_name = safety_detection["class_name"]
+                        
+                        logger.info(f"  person {person_idx} detection: class={class_id}({class_name}), score={confidence:.3f}")
+                        
+                        if class_id == 0:  # "illegal" - 不合规
+                            # 不合规检测：直接用置信度作为告警值
+                            current_alert_score = confidence
+                            logger.info(f"    -> illegal detection, alert_score = {current_alert_score:.3f}")
+                        elif class_id == 1:  # "compliant" - 合规
+                            # 合规检测：用 1 - 置信度 作为告警值
+                            current_alert_score = 1.0 - confidence
+                            logger.info(f"    -> compliant detection, alert_score = 1.0 - {confidence:.3f} = {current_alert_score:.3f}")
+                        else:
+                            logger.warning(f"    -> unknown class {class_id}, skipping")
+                            continue
+                        
+                        # 保留最大告警值
+                        if current_alert_score > max_alert_score:
+                            max_alert_score = current_alert_score
+                            logger.info(f"    -> new max alert_score: {max_alert_score:.3f}")
+                
+                # Step 6: 只返回有合规检测结果的人员
+                if found_compliance_detection and max_alert_score > 0:
+                    # 归一化人员边界框坐标（使用原始人员边界框）
+                    person_left = person_bbox[0] / img_width
+                    person_top = person_bbox[1] / img_height
+                    person_width = (person_bbox[2] - person_bbox[0]) / img_width
+                    person_height = (person_bbox[3] - person_bbox[1]) / img_height
+                    
+                    final_results.append({
+                        "score": max_alert_score,  # 最大告警值
+                        "person_confidence": person_conf,
+                        "has_compliance_detection": found_compliance_detection,
+                        "location": {
+                            "left": person_left,
+                            "top": person_top,
+                            "width": person_width,
+                            "height": person_height
+                        }
+                    })
+                    
+                    logger.info(f"person {person_idx} final result: max_alert_score={max_alert_score:.3f}")
                 else:
-                    logger.warning(f"unknown class {class_idx}, skipping")
-                    continue
-                
-                # Get normalized coordinates from detection
-                location = safetybelt_item["location"]
-                
-                final_results.append({
-                    "score": violation_score,
-                    "person_confidence": 1.0,  # No separate person detection
-                    "has_safetybelt": has_safetybelt,
-                    "safetybelt_score": safetybelt_score,
-                    "location": {
-                        "left": location["left"],
-                        "top": location["top"],
-                        "width": location["width"],
-                        "height": location["height"]
-                    }
-                })
+                    logger.info(f"person {person_idx}: no compliance detection, skipping")
             
-            logger.info(f"final safetybelt results: {len(final_results)} detections processed")
+            logger.info(f"final safetybelt results: {len(final_results)} persons with detections")
             return final_results, 0
             
         except Exception as e:
