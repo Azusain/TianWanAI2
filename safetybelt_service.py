@@ -287,68 +287,9 @@ class SafetyBeltService:
                 
                 
                 # Step 5: Process the compliance detection results for this person
-                if safetybelt_errno == 0 and safetybelt_results:
-                    # Find the detection result with highest confidence for this person
-                    best_confidence = 0.0
-                    best_detection = None
-                    
-                    for safety_detection in safetybelt_results:
-                        class_id = safety_detection["class"]
-                        confidence = safety_detection["score"]
-                        class_name = safety_detection["class_name"]
-                        location = safety_detection["location"]
-                        
-                        logger.info(f"  person {person_idx} detection: class={class_id}({class_name}), confidence={confidence:.3f}, location=({location['left']:.3f},{location['top']:.3f},{location['width']:.3f},{location['height']:.3f})")
-                        
-                        # Keep the detection with highest confidence
-                        if confidence > best_confidence:
-                            best_confidence = confidence
-                            best_detection = safety_detection
-                    
-                    # Process the best detection result
-                    if best_detection:
-                        class_id = best_detection["class"]
-                        confidence = best_detection["score"]
-                        class_name = best_detection["class_name"]
-                        
-                        # Calculate violation score using model's original design
-                        if class_id == 0:  # "illegal" - non-compliant
-                            violation_score = confidence  # Use model's non-compliance confidence directly
-                            status_text = "NON-COMPLIANT (no safety belt)"
-                            logger.info(f"  person {person_idx} -> BEST: {status_text}, confidence={confidence:.3f}, violation_score={violation_score:.3f}")
-                        elif class_id == 1:  # "compliant" - compliant
-                            violation_score = 1.0 - confidence  # Higher compliance = lower violation
-                            status_text = "COMPLIANT (wearing safety belt)"
-                            logger.warning(f"  person {person_idx} -> BEST: {status_text}, confidence={confidence:.3f}, violation_score=1.0-{confidence:.3f}={violation_score:.3f}")
-                            logger.warning(f"  ⚠️ POTENTIAL FALSE POSITIVE: model detected safety belt with high confidence but user reports no safety belt visible")
-                        else:
-                            logger.warning(f"  person {person_idx} -> unknown class {class_id}({class_name}), skipping person")
-                            continue
-                        
-                        # Normalize person bounding box coordinates
-                        person_left = person_bbox[0] / img_width
-                        person_top = person_bbox[1] / img_height
-                        person_width = (person_bbox[2] - person_bbox[0]) / img_width
-                        person_height = (person_bbox[3] - person_bbox[1]) / img_height
-                        
-                        final_results.append({
-                            "score": violation_score,  # Original model-based violation score
-                            "person_confidence": person_conf,
-                            "safetybelt_confidence": confidence,  # Original safetybelt detection confidence
-                            "safetybelt_class": class_id,
-                            "safetybelt_class_name": class_name,
-                            "location": {
-                                "left": person_left,
-                                "top": person_top,
-                                "width": person_width,
-                                "height": person_height
-                            }
-                        })
-                        
-                        logger.info(f"person {person_idx} added to results: violation_score={violation_score:.3f}")
-                else:
-                    # No safetybelt objects detected for this person - assume no safety belt (dangerous)
-                    logger.info(f"person {person_idx}: no safetybelt objects detected, assuming no safety belt (violation_score=1.0)")
+                if safetybelt_errno != 0 or not safetybelt_results:
+                    # No detection results - assume violation for safety
+                    logger.warning(f"person {person_idx}: no detection results, assuming VIOLATION for safety")
                     
                     # Normalize person bounding box coordinates
                     person_left = person_bbox[0] / img_width
@@ -357,11 +298,11 @@ class SafetyBeltService:
                     person_height = (person_bbox[3] - person_bbox[1]) / img_height
                     
                     final_results.append({
-                        "score": 1.0,  # Maximum violation score - no safety belt detected
+                        "score": 1.0,  # Maximum violation score for uncertainty
                         "person_confidence": person_conf,
-                        "safetybelt_confidence": 0.0,  # No safety belt object detected
-                        "safetybelt_class": -1,  # No class detected
-                        "safetybelt_class_name": "no_detection",
+                        "safetybelt_confidence": 0.0,  # No detection confidence
+                        "safetybelt_class": 0,  # Assume violation
+                        "safetybelt_class_name": "illegal_no_detection",
                         "location": {
                             "left": person_left,
                             "top": person_top,
@@ -370,7 +311,55 @@ class SafetyBeltService:
                         }
                     })
                     
-                    logger.info(f"person {person_idx} added to results: violation_score=1.0 (no safety belt detected)")
+                    logger.info(f"person {person_idx} added to results: violation_score=1.0 (no detection = assumed violation)")
+                    continue
+                
+                # Check for any compliant detection first (anti-false-positive)
+                skip_person = False
+                for det in safetybelt_results:
+                    if det["class"] == 1:  # compliant
+                        logger.info(f"  person {person_idx}: COMPLIANT detected (confidence={det['score']:.3f}), skipping to prevent false positives")
+                        skip_person = True
+                        break
+                
+                if skip_person:
+                    continue  # Skip to next person
+                
+                # Only process violations (no compliant detections found)
+                best_violation = None
+                best_violation_score = 0.0
+                
+                for det in safetybelt_results:
+                    if det["class"] == 0 and det["score"] > best_violation_score:  # violation
+                        best_violation = det
+                        best_violation_score = det["score"]
+                        logger.warning(f"  person {person_idx}: VIOLATION detected (confidence={det['score']:.3f})")
+                
+                # Output violation if found
+                if best_violation:
+                    # Normalize person bounding box coordinates
+                    person_left = person_bbox[0] / img_width
+                    person_top = person_bbox[1] / img_height
+                    person_width = (person_bbox[2] - person_bbox[0]) / img_width
+                    person_height = (person_bbox[3] - person_bbox[1]) / img_height
+                    
+                    final_results.append({
+                        "score": best_violation_score,
+                        "person_confidence": person_conf,
+                        "safetybelt_confidence": best_violation_score,
+                        "safetybelt_class": 0,
+                        "safetybelt_class_name": "illegal",
+                        "location": {
+                            "left": person_left,
+                            "top": person_top,
+                            "width": person_width,
+                            "height": person_height
+                        }
+                    })
+                    
+                    logger.info(f"person {person_idx} added to results: violation_score={best_violation_score:.3f}")
+                else:
+                    logger.info(f"person {person_idx}: no violations found, skipping")
             
             logger.info(f"final safetybelt results: {len(final_results)} persons with detections")
             return final_results, 0

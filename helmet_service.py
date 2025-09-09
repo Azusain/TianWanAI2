@@ -8,6 +8,7 @@ import cv2
 import torch
 import time
 import math
+import datetime  # TEMPORARY: for debug image naming
 from flask import Flask, request, jsonify
 from loguru import logger
 from uuid import uuid4
@@ -22,6 +23,51 @@ from yolox.data.data_augment import ValTransform
 from yolox.data.datasets import VOC_CLASSES
 from yolox.exp import get_exp
 from yolox.utils import get_model_info, postprocess
+
+# TEMPORARY DEBUG FUNCTION - TO BE REMOVED LATER
+def save_debug_helmet_image(img, person_idx, helmet_results, has_helmet, violation_score):
+    """Save debug image with helmet detection results for visual inspection"""
+    try:
+        debug_dir = os.path.join(script_dir, "debug_helmet_images")
+        os.makedirs(debug_dir, exist_ok=True)
+        
+        timestamp = datetime.datetime.now().strftime("%H%M%S")
+        img_copy = img.copy()
+        
+        # Draw helmet detection results on the image
+        if helmet_results:
+            for helmet_item in helmet_results:
+                if helmet_item["class"] == 0:  # helmet class
+                    # Convert normalized coordinates back to pixel coordinates
+                    img_h, img_w = img.shape[:2]
+                    location = helmet_item["location"]
+                    x1 = int((location["left"]) * img_w)
+                    y1 = int((location["top"]) * img_h)
+                    x2 = int((location["left"] + location["width"]) * img_w)
+                    y2 = int((location["top"] + location["height"]) * img_h)
+                    
+                    # Draw bounding box
+                    color = (0, 255, 0) if has_helmet else (0, 0, 255)
+                    cv2.rectangle(img_copy, (x1, y1), (x2, y2), color, 2)
+                    
+                    # Draw confidence score
+                    conf_text = f"Helmet: {helmet_item['score']:.3f}"
+                    cv2.putText(img_copy, conf_text, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+        
+        # Draw violation score on top
+        violation_text = f"Person {person_idx} - Violation: {violation_score:.3f}"
+        has_helmet_text = f"Has Helmet: {has_helmet}"
+        cv2.putText(img_copy, violation_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+        cv2.putText(img_copy, has_helmet_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+        
+        filename = f"helmet_debug_person{person_idx}_{timestamp}_v{violation_score:.3f}.jpg"
+        filepath = os.path.join(debug_dir, filename)
+        cv2.imwrite(filepath, img_copy)
+        
+        logger.info(f"DEBUG: Saved helmet detection image: {filepath}")
+        
+    except Exception as e:
+        logger.error(f"Failed to save debug helmet image: {e}")
 
 def get_device():
     """Auto-detect device: prefer CUDA, fallback to CPU"""
@@ -209,37 +255,42 @@ class HelmetPredictor:
         
         results = []
         for i in range(len(cls)):
-            if float(scores[i]) > cls_conf:
-                x1, y1, x2, y2 = bboxes[i].tolist()
-                width_px = x2 - x1
-                height_px = y2 - y1
-                cx = x1 + width_px / 2
-                cy = y1 + height_px / 2
+            class_idx = int(cls[i])
+            score = float(scores[i])
+            
+            # Filter: only process helmet detections (class 0), ignore person detections (class 1)
+            if class_idx != 0 or score <= cls_conf:
+                continue
                 
-                # normalize coordinates
-                img_width = img_info["width"]
-                img_height = img_info["height"]
-                cxn = cx / img_width
-                cyn = cy / img_height
-                width_n = width_px / img_width
-                height_n = height_px / img_height
-                left_n = cxn - width_n / 2
-                top_n = cyn - height_n / 2
-                
-                class_idx = int(cls[i])
-                class_name = self.predictor.cls_names[class_idx] if class_idx < len(self.predictor.cls_names) else f"class_{class_idx}"
-                
-                results.append({
-                    "score": float(scores[i]),
-                    "class": class_idx,
-                    "class_name": class_name,
-                    "location": {
-                        "left": left_n,
-                        "top": top_n,
-                        "width": width_n,
-                        "height": height_n
-                    }
-                })
+            x1, y1, x2, y2 = bboxes[i].tolist()
+            width_px = x2 - x1
+            height_px = y2 - y1
+            cx = x1 + width_px / 2
+            cy = y1 + height_px / 2
+            
+            # normalize coordinates
+            img_width = img_info["width"]
+            img_height = img_info["height"]
+            cxn = cx / img_width
+            cyn = cy / img_height
+            width_n = width_px / img_width
+            height_n = height_px / img_height
+            left_n = cxn - width_n / 2
+            top_n = cyn - height_n / 2
+            
+            class_name = self.predictor.cls_names[class_idx] if class_idx < len(self.predictor.cls_names) else f"class_{class_idx}"
+            
+            results.append({
+                "score": score,
+                "class": class_idx,
+                "class_name": class_name,
+                "location": {
+                    "left": left_n,
+                    "top": top_n,
+                    "width": width_n,
+                    "height": height_n
+                }
+            })
         
         return results
 
@@ -291,22 +342,31 @@ class HelmetService:
                 has_helmet = False
                 max_helmet_score = 0.0
                 
+                # TEMPORARY DEBUG: Log all detection details
+                logger.info(f"[DEBUG] person {person_idx} helmet detection details:")
+                logger.info(f"  - errno: {helmet_errno}")
+                logger.info(f"  - results count: {len(helmet_results) if helmet_results else 0}")
+                
                 if helmet_errno == 0 and helmet_results:
                     for helmet_idx, helmet_item in enumerate(helmet_results):
-                        logger.info(f"helmet result {helmet_idx}: class={helmet_item['class']}, class_name='{helmet_item['class_name']}', score={helmet_item['score']:.3f}")
+                        logger.info(f"  helmet result {helmet_idx}: class={helmet_item['class']}, class_name='{helmet_item['class_name']}', score={helmet_item['score']:.3f}")
                         # Check for class 0 which is "hat" according to VOC_CLASSES
                         if helmet_item["class"] == 0:
                             has_helmet = True
                             max_helmet_score = max(max_helmet_score, helmet_item["score"])
-                            logger.info(f"helmet detected for person {person_idx}, score: {helmet_item['score']:.3f}")
+                            logger.warning(f"  ⚠️ HELMET DETECTED for person {person_idx}, score: {helmet_item['score']:.3f} - Please verify if this is correct!")
+                        else:
+                            logger.info(f"  Non-helmet detection (class {helmet_item['class']}), ignoring")
+                else:
+                    logger.info(f"  No helmet detections in person {person_idx} crop")
                 
                 # Calculate helmet violation score
                 if has_helmet:
-                    violation_score = 1.0 - max_helmet_score
-                    logger.info(f"person {person_idx} has helmet, violation_score: {violation_score:.3f}")
+                    violation_score = 0.0  # helmet detected = no violation
+                    logger.warning(f"person {person_idx} has helmet detected, violation_score: {violation_score:.3f} (helmet detected = safe)")
                 else:
                     violation_score = 1.0  # No helmet detected = maximum violation
-                    logger.info(f"person {person_idx} no helmet detected, violation_score: 1.0")
+                    logger.info(f"person {person_idx} no helmet detected, violation_score: 1.0 (maximum danger)")
                 
                 # Normalize person bbox coordinates
                 person_left = person_bbox[0] / img_width
