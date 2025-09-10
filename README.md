@@ -26,12 +26,12 @@ Use the pre-built `azusaing/yolox` base image and mount your source code:
 # GPU deployment
 docker run -d -p 8902:8080 --gpus '"device=0"' --cpus=16 \
   -v $(pwd):/root \
-  azusaing/yolox:latest bash run.bash
+  azusaing/yolox:latest
 
 # CPU testing
 docker run -d --rm -p 8902:8080 \
   -v $(pwd):/root \
-  azusaing/yolox:latest bash run.bash
+  azusaing/yolox:latest
 ```
 
 ### Legacy: Build Full Image

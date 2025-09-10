@@ -63,5 +63,5 @@ RUN mkdir -p logs
 # Expose all service ports
 EXPOSE 8080 8901 8902 8903
 
-# Default command - when mounting source code, this will execute /root/run.bash
-CMD ["bash", "run.bash"]
+# Default command - automatically activate venv and run the application
+CMD ["bash", "-c", "source /root/venv/bin/activate && bash run.bash"]
