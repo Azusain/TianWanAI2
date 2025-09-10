@@ -25,11 +25,12 @@ logger.add(
     diagnose=True,
     format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level} | {name}:{function}:{line} | {message}"
 )
-# Keep console output
+# Keep console output with proper colors
 logger.add(
-    lambda msg: print(msg, end=""),
+    sys.stderr,
     colorize=True,
-    format="<green>{time:HH:mm:ss}</green> | <level>{level}</level> | <cyan>{name}:{function}:{line}</cyan> | {message}",
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}:{function}:{line}</cyan> | {message}",
+    level="DEBUG",
     enqueue=True
 )
 
