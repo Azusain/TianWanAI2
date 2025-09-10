@@ -11,6 +11,26 @@ from flask import Flask, request, jsonify
 from loguru import logger
 from uuid import uuid4
 
+# Configure loguru for async logging
+logger.remove()  # Remove default handler
+logger.add(
+    "logs/fire_service_{time:YYYY-MM-DD}.log",
+    rotation="1 day",
+    retention="7 days",
+    compression="zip",
+    enqueue=True,  # Enable async logging
+    backtrace=True,
+    diagnose=True,
+    format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level} | {name}:{function}:{line} | {message}"
+)
+# Keep console output
+logger.add(
+    lambda msg: print(msg, end=""),
+    colorize=True,
+    format="<green>{time:HH:mm:ss}</green> | <level>{level}</level> | <cyan>{name}:{function}:{line}</cyan> | {message}",
+    enqueue=True
+)
+
 # Add fire model directory to path
 script_dir = os.path.dirname(os.path.abspath(__file__))
 fire_yolo_path = os.path.join(script_dir, "YOLO-main-fire")
