@@ -18,30 +18,15 @@ Microservice architecture with:
 
 ## Docker Deployment
 
-### Recommended: Volume Mount with Base Image
-
-Use the pre-built `azusaing/yolox` base image and mount your source code:
-
 ```bash
-# GPU deployment
-docker run -d -p 8902:8080 --gpus '"device=0"' --cpus=16 \
-  -v $(pwd):/root \
-  azusaing/yolox:latest
-
-# CPU testing
-docker run -d --rm -p 8902:8080 \
-  -v $(pwd):/root \
-  azusaing/yolox:latest
-```
-
-### Legacy: Build Full Image
-
-```bash
-# Build full image with all dependencies
+# Build image with all dependencies
 docker build -t tianwan2:latest .
 
-# Run
+# GPU deployment
 docker run -d -p 8902:8080 --gpus '"device=0"' --cpus=16 tianwan2:latest
+
+# CPU testing
+docker run -d --rm -p 8902:8080 tianwan2:latest
 ```
 
 ## Usage
