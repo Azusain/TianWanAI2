@@ -33,6 +33,27 @@ RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/c
     pip install -r requirements.txt && \
     pip install requests gunicorn
 
+# Create placeholder YOLO projects to pre-install dependencies
+RUN mkdir -p YOLO-main-fire/yolox && \
+    mkdir -p YOLO-main-helmet/yolox && \
+    mkdir -p YOLO-main-safetybelt/yolox && \
+    touch YOLO-main-fire/yolox/__init__.py && \
+    touch YOLO-main-helmet/yolox/__init__.py && \
+    touch YOLO-main-safetybelt/yolox/__init__.py
+
+# Create minimal setup.py files to enable editable installation
+RUN echo 'from setuptools import setup, find_packages' > YOLO-main-fire/setup.py && \
+    echo 'setup(name="yolox-fire", packages=find_packages())' >> YOLO-main-fire/setup.py && \
+    echo 'from setuptools import setup, find_packages' > YOLO-main-helmet/setup.py && \
+    echo 'setup(name="yolox-helmet", packages=find_packages())' >> YOLO-main-helmet/setup.py && \
+    echo 'from setuptools import setup, find_packages' > YOLO-main-safetybelt/setup.py && \
+    echo 'setup(name="yolox-safetybelt", packages=find_packages())' >> YOLO-main-safetybelt/setup.py
+
+# Pre-install YOLOX projects in editable mode
+RUN cd YOLO-main-fire && pip install -e . && \
+    cd ../YOLO-main-helmet && pip install -e . && \
+    cd ../YOLO-main-safetybelt && pip install -e .
+
 # Create symlink for python if needed
 RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 || true
 
@@ -42,5 +63,5 @@ RUN mkdir -p logs
 # Expose all service ports
 EXPOSE 8080 8901 8902 8903
 
-# Default command - can be overridden when mounting application code
-CMD ["bash"]
+# Default command - when mounting source code, this will execute /root/run.bash
+CMD ["bash", "run.bash"]
