@@ -368,18 +368,21 @@ class HelmetService:
                 logger.info(f"  - errno: {helmet_errno}")
                 logger.info(f"  - results count: {len(helmet_results) if helmet_results else 0}")
                 
-                if helmet_errno == 0 and helmet_results:
-                    for helmet_idx, helmet_item in enumerate(helmet_results):
-                        logger.info(f"  helmet result {helmet_idx}: class={helmet_item['class']}, class_name='{helmet_item['class_name']}', score={helmet_item['score']:.3f}")
-                        # Check for class 0 which is "hat" according to VOC_CLASSES
-                        if helmet_item["class"] == 0:
-                            has_helmet = True
-                            max_helmet_score = max(max_helmet_score, helmet_item["score"])
-                            logger.warning(f"  ⚠️ HELMET DETECTED for person {person_idx}, score: {helmet_item['score']:.3f} - Please verify if this is correct!")
-                        else:
-                            logger.info(f"  Non-helmet detection (class {helmet_item['class']}), ignoring")
-                else:
-                    logger.info(f"  No helmet detections in person {person_idx} crop")
+                # Skip this person if no helmet detection results
+                if helmet_errno != 0 or not helmet_results:
+                    logger.info(f"  No helmet detections for person {person_idx}, skipping this person")
+                    continue
+                
+                # Process helmet detection results
+                for helmet_idx, helmet_item in enumerate(helmet_results):
+                    logger.info(f"  helmet result {helmet_idx}: class={helmet_item['class']}, class_name='{helmet_item['class_name']}', score={helmet_item['score']:.3f}")
+                    # Check for class 0 which is "hat" according to VOC_CLASSES
+                    if helmet_item["class"] == 0:
+                        has_helmet = True
+                        max_helmet_score = max(max_helmet_score, helmet_item["score"])
+                        logger.warning(f"  ⚠️ HELMET DETECTED for person {person_idx}, score: {helmet_item['score']:.3f} - Please verify if this is correct!")
+                    else:
+                        logger.info(f"  Non-helmet detection (class {helmet_item['class']}), ignoring")
                 
                 # Calculate helmet violation score
                 if has_helmet:

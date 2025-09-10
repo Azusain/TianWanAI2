@@ -309,30 +309,8 @@ class SafetyBeltService:
                 
                 # Step 5: Process the compliance detection results for this person
                 if safetybelt_errno != 0 or not safetybelt_results:
-                    # No detection results - assume violation for safety
-                    logger.warning(f"person {person_idx}: no detection results, assuming VIOLATION for safety")
-                    
-                    # Normalize person bounding box coordinates
-                    person_left = person_bbox[0] / img_width
-                    person_top = person_bbox[1] / img_height
-                    person_width = (person_bbox[2] - person_bbox[0]) / img_width
-                    person_height = (person_bbox[3] - person_bbox[1]) / img_height
-                    
-                    final_results.append({
-                        "score": 1.0,  # Maximum violation score for uncertainty
-                        "person_confidence": person_conf,
-                        "safetybelt_confidence": 0.0,  # No detection confidence
-                        "safetybelt_class": 0,  # Assume violation
-                        "safetybelt_class_name": "illegal_no_detection",
-                        "location": {
-                            "left": person_left,
-                            "top": person_top,
-                            "width": person_width,
-                            "height": person_height
-                        }
-                    })
-                    
-                    logger.info(f"person {person_idx} added to results: violation_score=1.0 (no detection = assumed violation)")
+                    # No detection results - skip this person
+                    logger.info(f"person {person_idx}: no detection results, skipping this person")
                     continue
                 
                 # Check for any compliant detection first (anti-false-positive)
