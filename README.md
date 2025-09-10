@@ -1,38 +1,47 @@
-# TianWanAI2
+# TianWan2
 
-Multi-model object detection system based on YOLOX, including fire detection, helmet detection, and safety belt detection.
+Microservice-based object detection system using YOLOX, providing fire detection, helmet safety detection, and safety belt detection through REST APIs.
 
-## Features
+## Supported Models
 
-- 🔥 **Fire Detection**: Real-time fire detection in video streams
-- ⛑️ **Helmet Detection**: Detect if personnel are wearing safety helmets
-- 🔗 **Safety Belt Detection**: Detect if personnel are wearing safety belts
+- 🔥 **Fire Detection** (`/fire`) - Real-time fire detection in images
+- ⛑️ **Helmet Detection** (`/helmet`) - Safety helmet compliance detection
+- 🔗 **Safety Belt Detection** (`/safetybelt`) - Safety belt compliance detection
 
-## Requirements
+## Architecture
 
-- Python 3.9+
-- PyTorch 2.8.0+
-- OpenCV 4.12.0+
-- See requirements.txt for other dependencies
+Microservice architecture with:
+- API Gateway (port 8080) - Routes requests to appropriate services
+- Fire Detection Service (port 8901)
+- Helmet Detection Service (port 8902) 
+- Safety Belt Detection Service (port 8903)
 
-## Installation
+## Docker Deployment
 
-1. Clone the repository
+### Recommended: Volume Mount with Base Image
+
+Use the pre-built `azusaing/yolox` base image and mount your source code:
+
 ```bash
-git clone https://github.com/Azusain/TianWanAI2.git
-cd TianWanAI2
+# GPU deployment
+docker run -d -p 8902:8080 --gpus '"device=0"' --cpus=16 \
+  -v $(pwd):/root \
+  azusaing/yolox:latest bash run.bash
+
+# CPU testing
+docker run -d --rm -p 8902:8080 \
+  -v $(pwd):/root \
+  azusaing/yolox:latest bash run.bash
 ```
 
-2. Create virtual environment
-```bash
-python -m venv venv
-.\venv\Scripts\Activate.ps1  # Windows
-# source venv/bin/activate   # Linux/Mac
-```
+### Legacy: Build Full Image
 
-3. Install dependencies
 ```bash
-pip install -r requirements.txt
+# Build full image with all dependencies
+docker build -t tianwan2:latest .
+
+# Run
+docker run -d -p 8902:8080 --gpus '"device=0"' --cpus=16 tianwan2:latest
 ```
 
 ## Usage

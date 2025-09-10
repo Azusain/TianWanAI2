@@ -1,0 +1,79 @@
+name: Build YOLOX Base Image
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # free up disk space for large builds
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Read version from file
+        id: version
+        run: |
+          VERSION=$(cat version)
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-yolox-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-yolox-buildx-
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build yolox base image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile_Ultralytics
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/yolox:${{ env.VERSION }}
+            ${{ secrets.DOCKER_USERNAME }}/yolox:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  notify:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    steps:
+      - name: Notify Discord
+        uses: nobrayner/discord-webhook@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          discord-webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          title: "${{ github.repository }}: ${{ github.workflow }} - ${{ github.sha }}"
+          description: |
+            Workflow: ${{ github.workflow }}
+            Status: ${{ job.status }}
+            Repository: ${{ github.repository }}
+            Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          include-details: "false"
+          color-success: "#17cf48"
+          color-failure: "#eb4034"
+          color-cancelled: "#42daf5"

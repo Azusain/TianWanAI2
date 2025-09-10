@@ -1,4 +1,5 @@
-# TianWan AI Detection Microservices Docker Image
+# Base ultralytics microservices environment image
+# CUDA 12.6.3 + cuDNN runtime with Python 3.11 and all dependencies
 FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04
 
 ENV WORKDIR=/root
@@ -32,26 +33,14 @@ RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/c
     pip install -r requirements.txt && \
     pip install requests gunicorn
 
-# Copy YOLO projects to their own directories
-COPY YOLO-main-fire ./YOLO-main-fire
-COPY YOLO-main-helmet ./YOLO-main-helmet
-COPY YOLO-main-safetybelt ./YOLO-main-safetybelt
+# Create symlink for python if needed
+RUN ln -sf /usr/bin/python3.11 /usr/bin/python3 || true
 
-# Install YOLOX in editable mode for each project
-RUN cd YOLO-main-fire && pip install -e . && \
-    cd ../YOLO-main-helmet && pip install -e . && \
-    cd ../YOLO-main-safetybelt && pip install -e .
-
-# Copy models and services
-COPY models/ ./models/
-COPY fire_service.py helmet_service.py safetybelt_service.py gateway.py ./
-COPY run.bash ./
-
-# Make startup script executable
-RUN chmod +x run.bash
+# Create logs directory
+RUN mkdir -p logs
 
 # Expose all service ports
 EXPOSE 8080 8901 8902 8903
 
-# Use microservices architecture
-CMD ["bash", "run.bash"]
+# Default command - can be overridden when mounting application code
+CMD ["bash"]
