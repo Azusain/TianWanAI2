@@ -316,7 +316,7 @@ class HelmetService:
                 
                 # Check for helmet detection in the cropped region
                 has_helmet = False
-                min_helmet_score = 0.0
+                helmet_scores = []
                 
                 # TEMPORARY DEBUG: Log all detection details
                 logger.info(f"[DEBUG] person {person_idx} helmet detection details:")
@@ -334,15 +334,16 @@ class HelmetService:
                     # Check for class 0 which is "hat" according to VOC_CLASSES
                     if helmet_item["class"] == 0:
                         has_helmet = True
-                        min_helmet_score = min(min_helmet_score, helmet_item["score"])
+                        helmet_scores.append(helmet_item["score"])
                         logger.warning(f"  ⚠️ HELMET DETECTED for person {person_idx}, score: {helmet_item['score']:.3f} - Please verify if this is correct!")
                     else:
                         logger.info(f"  Non-helmet detection (class {helmet_item['class']}), ignoring")
                 
                 # Calculate helmet violation score
                 if has_helmet:
-                    violation_score = 1 - min_helmet_score  # helmet detected = no violation
-                    logger.warning(f"person {person_idx} has helmet detected, violation_score: {violation_score:.3f} (helmet detected = safe)")
+                    avg_helmet_score = sum(helmet_scores) / len(helmet_scores)
+                    violation_score = 1 - avg_helmet_score  # helmet detected = no violation
+                    logger.warning(f"person {person_idx} has helmet detected, avg_helmet_score: {avg_helmet_score:.3f}, violation_score: {violation_score:.3f} (helmet detected = safe)")
                 else:
                     # ignore person without helmet
                     continue
@@ -357,7 +358,7 @@ class HelmetService:
                     "score": violation_score,
                     "person_confidence": person_conf,
                     "has_helmet": has_helmet,
-                    "helmet_score": min_helmet_score if has_helmet else 0.0,
+                    "helmet_score": sum(helmet_scores) / len(helmet_scores) if has_helmet else 0.0,
                     "location": {
                         "left": person_left,
                         "top": person_top,
