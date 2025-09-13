@@ -316,7 +316,7 @@ class HelmetService:
                 
                 # Check for helmet detection in the cropped region
                 has_helmet = False
-                max_helmet_score = 0.0
+                min_helmet_score = 0.0
                 
                 # TEMPORARY DEBUG: Log all detection details
                 logger.info(f"[DEBUG] person {person_idx} helmet detection details:")
@@ -334,18 +334,18 @@ class HelmetService:
                     # Check for class 0 which is "hat" according to VOC_CLASSES
                     if helmet_item["class"] == 0:
                         has_helmet = True
-                        max_helmet_score = max(max_helmet_score, helmet_item["score"])
+                        min_helmet_score = min(min_helmet_score, helmet_item["score"])
                         logger.warning(f"  ⚠️ HELMET DETECTED for person {person_idx}, score: {helmet_item['score']:.3f} - Please verify if this is correct!")
                     else:
                         logger.info(f"  Non-helmet detection (class {helmet_item['class']}), ignoring")
                 
                 # Calculate helmet violation score
                 if has_helmet:
-                    violation_score = 0.0  # helmet detected = no violation
+                    violation_score = 1 - min_helmet_score  # helmet detected = no violation
                     logger.warning(f"person {person_idx} has helmet detected, violation_score: {violation_score:.3f} (helmet detected = safe)")
                 else:
-                    violation_score = 1.0  # No helmet detected = maximum violation
-                    logger.info(f"person {person_idx} no helmet detected, violation_score: 1.0 (maximum danger)")
+                    # ignore person without helmet
+                    continue
                 
                 # Normalize person bbox coordinates
                 person_left = person_bbox[0] / img_width
@@ -357,7 +357,7 @@ class HelmetService:
                     "score": violation_score,
                     "person_confidence": person_conf,
                     "has_helmet": has_helmet,
-                    "helmet_score": max_helmet_score if has_helmet else 0.0,
+                    "helmet_score": min_helmet_score if has_helmet else 0.0,
                     "location": {
                         "left": person_left,
                         "top": person_top,
