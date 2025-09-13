@@ -125,8 +125,8 @@ class FirePredictor:
         bboxes = output[:, 0:4]
         bboxes /= ratio
         cls = output[:, 6]
-        # Use only class confidence for fire detection
-        scores = output[:, 5]
+        # Use combined score: objectness * class confidence
+        scores = output[:, 4] * output[:, 5]
         
         results = []
         for i in range(len(cls)):

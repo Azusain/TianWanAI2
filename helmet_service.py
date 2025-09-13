@@ -45,51 +45,6 @@ from yolox.data.datasets import VOC_CLASSES
 from yolox.exp import get_exp
 from yolox.utils import get_model_info, postprocess
 
-# TEMPORARY DEBUG FUNCTION - TO BE REMOVED LATER
-def save_debug_helmet_image(img, person_idx, helmet_results, has_helmet, violation_score):
-    """Save debug image with helmet detection results for visual inspection"""
-    try:
-        debug_dir = os.path.join(script_dir, "debug_helmet_images")
-        os.makedirs(debug_dir, exist_ok=True)
-        
-        timestamp = datetime.datetime.now().strftime("%H%M%S")
-        img_copy = img.copy()
-        
-        # Draw helmet detection results on the image
-        if helmet_results:
-            for helmet_item in helmet_results:
-                if helmet_item["class"] == 0:  # helmet class
-                    # Convert normalized coordinates back to pixel coordinates
-                    img_h, img_w = img.shape[:2]
-                    location = helmet_item["location"]
-                    x1 = int((location["left"]) * img_w)
-                    y1 = int((location["top"]) * img_h)
-                    x2 = int((location["left"] + location["width"]) * img_w)
-                    y2 = int((location["top"] + location["height"]) * img_h)
-                    
-                    # Draw bounding box
-                    color = (0, 255, 0) if has_helmet else (0, 0, 255)
-                    cv2.rectangle(img_copy, (x1, y1), (x2, y2), color, 2)
-                    
-                    # Draw confidence score
-                    conf_text = f"Helmet: {helmet_item['score']:.3f}"
-                    cv2.putText(img_copy, conf_text, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-        
-        # Draw violation score on top
-        violation_text = f"Person {person_idx} - Violation: {violation_score:.3f}"
-        has_helmet_text = f"Has Helmet: {has_helmet}"
-        cv2.putText(img_copy, violation_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-        cv2.putText(img_copy, has_helmet_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-        
-        filename = f"helmet_debug_person{person_idx}_{timestamp}_v{violation_score:.3f}.jpg"
-        filepath = os.path.join(debug_dir, filename)
-        cv2.imwrite(filepath, img_copy)
-        
-        logger.info(f"DEBUG: Saved helmet detection image: {filepath}")
-        
-    except Exception as e:
-        logger.error(f"Failed to save debug helmet image: {e}")
-
 def get_device():
     """Auto-detect device: prefer CUDA, fallback to CPU"""
     if torch.cuda.is_available():
@@ -271,8 +226,8 @@ class HelmetPredictor:
         bboxes = output[:, 0:4]
         bboxes /= ratio
         cls = output[:, 6]
-        # Use only class confidence for helmet detection
-        scores = output[:, 5]
+        # Use combined score: objectness * class confidence
+        scores = output[:, 4] * output[:, 5]
         
         results = []
         for i in range(len(cls)):
