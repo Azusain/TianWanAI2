@@ -313,39 +313,35 @@ class SafetyBeltService:
                     logger.info(f"person {person_idx}: no detection results, skipping this person")
                     continue
                 
-                # Check for any compliant detection first (anti-false-positive)
-                skip_person = False
-                for det in safetybelt_results:
-                    if det["class"] == 1:  # compliant
-                        logger.info(f"  person {person_idx}: COMPLIANT detected (confidence={det['score']:.3f}), skipping to prevent false positives")
-                        skip_person = True
-                        break
-                
-                if skip_person:
-                    continue  # Skip to next person
-                
-                # Only process violations (no compliant detections found)
-                best_violation = None
-                best_violation_score = 0.0
+                # Only process illegal detections (class 0)
+                illegal_detections = []
+                total_illegal_score = 0.0
                 
                 for det in safetybelt_results:
-                    if det["class"] == 0 and det["score"] > best_violation_score:  # violation
-                        best_violation = det
-                        best_violation_score = det["score"]
+                    if det["class"] == 0:  # illegal
+                        illegal_detections.append(det)
+                        total_illegal_score += det["score"]
                         logger.warning(f"  person {person_idx}: VIOLATION detected (confidence={det['score']:.3f})")
                 
-                # Output violation if found
-                if best_violation:
-                    # Normalize person bounding box coordinates
-                    person_left = person_bbox[0] / img_width
-                    person_top = person_bbox[1] / img_height
-                    person_width = (person_bbox[2] - person_bbox[0]) / img_width
-                    person_height = (person_bbox[3] - person_bbox[1]) / img_height
-                    
-                    final_results.append({
-                        "score": best_violation_score,
-                        "person_confidence": person_conf,
-                        "safetybelt_confidence": best_violation_score,
+                # Skip if no illegal detections found
+                if not illegal_detections:
+                    logger.info(f"  person {person_idx}: no VIOLATION detected, skipping")
+                    continue
+                
+                # Calculate average violation score
+                avg_violation_score = total_illegal_score / len(illegal_detections)
+                
+                # Output violation with average score
+                # Normalize person bounding box coordinates
+                person_left = person_bbox[0] / img_width
+                person_top = person_bbox[1] / img_height
+                person_width = (person_bbox[2] - person_bbox[0]) / img_width
+                person_height = (person_bbox[3] - person_bbox[1]) / img_height
+                
+                final_results.append({
+                    "score": avg_violation_score,
+                    "person_confidence": person_conf,
+                    "safetybelt_confidence": avg_violation_score,
                         "safetybelt_class": 0,
                         "safetybelt_class_name": "illegal",
                         "location": {
@@ -356,9 +352,7 @@ class SafetyBeltService:
                         }
                     })
                     
-                    logger.info(f"person {person_idx} added to results: violation_score={best_violation_score:.3f}")
-                else:
-                    logger.info(f"person {person_idx}: no violations found, skipping")
+                    logger.info(f"person {person_idx} added to results: avg_violation_score={avg_violation_score:.3f} from {len(illegal_detections)} detections")
             
             logger.info(f"final safetybelt results: {len(final_results)} persons with detections")
             return final_results, 0
