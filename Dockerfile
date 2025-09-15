@@ -50,8 +50,5 @@ COPY run.bash ./
 # Make startup script executable
 RUN chmod +x run.bash
 
-# Expose all service ports
-EXPOSE 8080 8901 8902 8903
-
 # Use microservices architecture
 CMD ["bash", "run.bash"]
