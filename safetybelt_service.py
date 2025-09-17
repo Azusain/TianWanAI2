@@ -342,17 +342,17 @@ class SafetyBeltService:
                     "score": avg_violation_score,
                     "person_confidence": person_conf,
                     "safetybelt_confidence": avg_violation_score,
-                        "safetybelt_class": 0,
-                        "safetybelt_class_name": "illegal",
-                        "location": {
-                            "left": person_left,
-                            "top": person_top,
-                            "width": person_width,
-                            "height": person_height
-                        }
-                    })
-                    
-                    logger.info(f"person {person_idx} added to results: avg_violation_score={avg_violation_score:.3f} from {len(illegal_detections)} detections")
+                    "safetybelt_class": 0,
+                    "safetybelt_class_name": "illegal",
+                    "location": {
+                        "left": person_left,
+                        "top": person_top,
+                        "width": person_width,
+                        "height": person_height
+                    }
+                })
+                
+                logger.info(f"person {person_idx} added to results: avg_violation_score={avg_violation_score:.3f} from {len(illegal_detections)} detections")
             
             logger.info(f"final safetybelt results: {len(final_results)} persons with detections")
             return final_results, 0
