@@ -45,5 +45,5 @@ COPY safetybelt_service.py ./
 # Expose port for safetybelt service
 EXPOSE 8080
 
-# Run safety belt service
-CMD ["python", "safetybelt_service.py"]
+# Run safety belt service with gunicorn
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--timeout", "300", "safetybelt_service:app"]
