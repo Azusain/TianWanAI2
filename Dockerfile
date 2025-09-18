@@ -1,4 +1,4 @@
-# TianWan AI Detection Microservices Docker Image
+# TianWan2 Safety Belt Detection Docker Image
 FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04
 
 ENV WORKDIR=/root
@@ -32,23 +32,18 @@ RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/c
     pip install -r requirements.txt && \
     pip install requests gunicorn
 
-# Copy YOLO projects to their own directories
-COPY YOLO-main-fire ./YOLO-main-fire
-COPY YOLO-main-helmet ./YOLO-main-helmet
+# Copy YOLO safety belt project
 COPY YOLO-main-safetybelt ./YOLO-main-safetybelt
 
-# Install YOLOX in editable mode for each project
-RUN cd YOLO-main-fire && pip install -e . && \
-    cd ../YOLO-main-helmet && pip install -e . && \
-    cd ../YOLO-main-safetybelt && pip install -e .
+# Install YOLOX in editable mode
+RUN cd YOLO-main-safetybelt && pip install -e .
 
-# Copy models and services
+# Copy models and service
 COPY models/ ./models/
-COPY fire_service.py helmet_service.py safetybelt_service.py gateway.py ./
-COPY run.bash ./
+COPY safetybelt_service.py ./
 
-# Make startup script executable
-RUN chmod +x run.bash
+# Expose port for safetybelt service
+EXPOSE 8080
 
-# Use microservices architecture
-CMD ["bash", "run.bash"]
+# Run safety belt service
+CMD ["python", "safetybelt_service.py"]
