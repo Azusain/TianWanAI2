@@ -391,7 +391,7 @@ def validate_img_format():
     except binascii.Error: 
         return None, -3
 
-@app.route('/predict', methods=['POST'])
+@app.route('/safetybelt', methods=['POST'])
 def predict():
     """Safety belt compliance detection endpoint"""
     img, errno = validate_img_format()
