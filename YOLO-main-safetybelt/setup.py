@@ -16,7 +16,6 @@ except ImportError:
 
 def get_package_dir():
     pkg_dir = {
-        "yolox.tools": "tools",
         "yolox.exp.default": "exps/default",
     }
     return pkg_dir
@@ -39,9 +38,7 @@ def get_yolox_version():
 
 
 def get_long_description():
-    with open("README.md", "r", encoding="utf-8") as f:
-        long_description = f.read()
-    return long_description
+    return "YOLOX for safety belt detection"
 
 
 def get_ext_modules():
